@@ -1,3 +1,7 @@
+"""
+Initialize different agents.
+"""
+
 import os
 import warnings
 from openai import OpenAI
@@ -30,6 +34,10 @@ class Response:
 
 
 class Role:
+    """
+    Class to represent an agent role in a chat session.
+    """
+
     model: str
     prompt: str
 
@@ -77,7 +85,7 @@ class Role:
         """
         Handles the chat interaction with the specified model.
 
-        Parameters:
+        Args:
             query (str): The user's query or message.
             **generation_params: Additional parameters for the generation process.
 
@@ -87,7 +95,6 @@ class Role:
         Raises:
             ValueError: If an unsupported generation parameter is provided.
         """
-
         for param in generation_params.keys():
             if param not in self.ALLOWED_GEN_PARAM:
                 raise ValueError(f"Generation param {param} not implemented yet")
@@ -103,7 +110,5 @@ class Role:
 
         return Response(
             response.choices[0].message.content,
-            usage=Response.Usage(
-                response.usage.prompt_tokens, response.usage.completion_tokens
-            ),
+            usage=Usage(response.usage.prompt_tokens, response.usage.completion_tokens),
         )
