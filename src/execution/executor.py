@@ -3,7 +3,6 @@ This module contains the Executor class that represents an agent executing tasks
 It provides methods to interact with the OpenAI chat API and handle query execution.
 """
 
-import os
 import json
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -40,6 +39,7 @@ class ExecutorConfig:
     api_key: str
     model: str
     base_url: Optional[str] = None
+    system_message: Optional[str] = None
     generation_params: ExecutorGenerationParams = field(
         default_factory=ExecutorGenerationParams
     )
@@ -52,6 +52,9 @@ class ExecutorConfig:
         }
         if self.base_url:
             result["base_url"] = self.base_url
+
+        if self.system_message:
+            result["system_message"] = self.system_message
 
         gen_params = self.generation_params.to_dict()
         if gen_params:
@@ -72,6 +75,7 @@ class ExecutorConfig:
             api_key=data["api_key"],
             model=data["model"],
             base_url=data.get("base_url"),
+            system_message=data.get("system_message"),
             generation_params=gen_params,
         )
 
@@ -95,16 +99,6 @@ class ExecutorConfig:
             data["api_key"] = api_key
 
         return cls.from_dict(data)
-
-    @classmethod
-    def from_env(cls) -> "ExecutorConfig":
-        """Create configuration from environment variables."""
-        load_dotenv()
-        api_key = os.getenv("API_KEY", "")
-        base_url = os.getenv("API_BASE_URL")
-        model = os.getenv("MODEL", "gpt_4o_mini")
-
-        return cls(api_key=api_key, base_url=base_url, model=model)
 
 
 @dataclass
@@ -136,13 +130,10 @@ class Executor:
     """
 
     model: str
-    prompt: str
     config: ExecutorConfig
     client: OpenAI
 
-    def __init__(
-        self, prompt: str, config: Optional[ExecutorConfig] = None, model: str = None
-    ):
+    def __init__(self, config: Optional[ExecutorConfig] = None, model: str = None):
         """
         Initialize the Executor class with a prompt and configuration.
 
@@ -154,7 +145,6 @@ class Executor:
         Raises:
             ValueError: If the API key is not provided or the model is not specified.
         """
-        self.prompt = prompt
 
         # Initialize with config if provided, otherwise load from env
         if config:
@@ -177,7 +167,6 @@ class Executor:
     @classmethod
     def from_config_file(
         cls,
-        prompt: str,
         config_file: str,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
@@ -197,7 +186,7 @@ class Executor:
         config = ExecutorConfig.load_from_file(config_file, api_key)
         if model:
             config.model = model
-        return cls(prompt=prompt, config=config)
+        return cls(config=config)
 
     @classmethod
     def from_params(
@@ -256,9 +245,12 @@ class Executor:
         merged_params = self.config.generation_params.to_dict()
         merged_params.update(generation_params)
 
+        # Use system_message from config if available, otherwise use the prompt
+        system_content = self.config.system_message or ""
+
         response: ChatCompletion = self.client.chat.completions.create(
             messages=[
-                {"role": "system", "content": self.prompt},
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": query},
             ],
             model=self.model,
