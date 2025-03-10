@@ -1,21 +1,26 @@
 """
-CLI interface for running LLM-Agent Workflow Pipeline
+Main entry point for the LLM-Agent workflow pipelines.
 """
 
+import os
 import sys
 import json
 import logging
 import argparse
 from typing import Dict, Any
-from src.pipeline import Pipeline, ConditionalPipeline, PipelineStage, AgentType
+from pipeline.pipeline import Pipeline, ConditionalPipeline, PipelineStage, AgentType
+
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[logging.FileHandler("logs/pipeline.log")],
 )
 
+# Get logger
 logger = logging.getLogger("main")
 
 
