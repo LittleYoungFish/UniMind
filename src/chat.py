@@ -1,6 +1,6 @@
 """
-This module contains the Role class that represents an agent role in a chat session.
-It provides methods to interact with the OpenAI chat API and handle chat interactions.
+This module contains the Executor class that represents an agent executing tasks in a chat session.
+It provides methods to interact with the OpenAI chat API and handle query execution.
 """
 
 import os
@@ -12,9 +12,9 @@ from openai.types.chat.chat_completion import ChatCompletion
 
 
 @dataclass
-class Usage:
+class ExecutionUsage:
     """
-    Dataclass to represent the usage statistics of a chat model response.
+    Dataclass to represent the usage statistics of an execution response.
     """
 
     prompt: int
@@ -22,21 +22,21 @@ class Usage:
 
 
 @dataclass
-class Response:
+class ExecutionResult:
     """
-    Dataclass to represent a response from the chat model.
+    Dataclass to represent a result from the model execution.
     """
 
     content: str
-    usage: Usage
+    usage: ExecutionUsage
 
     def __str__(self):
-        return f"<Response> ({self.content[:50]})"
+        return f"<ExecutionResult> ({self.content[:50]})"
 
 
-class Role:
+class Executor:
     """
-    Class to represent an agent role in a chat session.
+    Class to represent an executor agent that processes queries through an LLM.
     """
 
     model: str
@@ -54,13 +54,13 @@ class Role:
 
     def __init__(self, prompt: str):
         """
-        Initialize the Role class with a prompt.
+        Initialize the Executor class with a prompt.
         Loads environment variables and sets up the OpenAI client.
         Validates the API key and model.
         Defaults to GPT-4o-mini if no model is specified.
 
         Parameters:
-            prompt (str): The initial prompt for the chat session.
+            prompt (str): The initial prompt for the executor.
 
         Raises:
             ValueError: If the API key is not provided or the model is not specified.
@@ -82,16 +82,16 @@ class Role:
         self.prompt = prompt
         self.model = model
 
-    def chat(self, query: str, **generation_params) -> Response:
+    def execute(self, query: str, **generation_params) -> ExecutionResult:
         """
-        Handles the chat interaction with the specified model.
+        Executes the query against the specified model.
 
         Args:
-            query (str): The user's query or message.
+            query (str): The user's query or task to execute.
             **generation_params: Additional parameters for the generation process.
 
         Returns:
-           Response: The response from the model.
+           ExecutionResult: The response from the model.
 
         Raises:
             ValueError: If an unsupported generation parameter is provided.
@@ -109,7 +109,9 @@ class Role:
             **generation_params,
         )
 
-        return Response(
+        return ExecutionResult(
             response.choices[0].message.content,
-            usage=Usage(response.usage.prompt_tokens, response.usage.completion_tokens),
+            usage=ExecutionUsage(
+                response.usage.prompt_tokens, response.usage.completion_tokens
+            ),
         )
