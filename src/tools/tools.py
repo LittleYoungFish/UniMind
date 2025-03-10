@@ -14,7 +14,7 @@ class Tools:
         If parent directories do not exist, they will be created.
 
         Args:
-            path: The path to the file to create
+            path: The path to the file to create. **MUST use relative path.**
             content: The content to write to the file
 
         Returns:
@@ -41,7 +41,7 @@ class Tools:
         Read and return the content of a file.
 
         Args:
-            path: The path to the file to read
+            path: The path to the file to read. **MUST use relative path.**
 
         Returns:
             Dict containing success status, message, and file content
@@ -62,10 +62,14 @@ class Tools:
             return {"success": False, "message": f"Failed to read file: {str(e)}"}
 
     @staticmethod
-    @tool(name="Execute Command", description="Execute a shell command")
+    @tool(
+        name="Execute Command",
+        description="Execute a shell command",
+        confirmation_required=True,
+    )
     def execute_command(command: str, cwd: Optional[str] = None) -> Dict[str, Any]:
         """
-        Execute a shell command.
+        Execute a shell command. Related path **MUST be relative path.**
 
         Args:
             command: The command to execute
@@ -96,7 +100,7 @@ class Tools:
         List contents of a directory.
 
         Args:
-            path: The path to list (defaults to current directory)
+            path: The path to list (defaults to current directory). **MUST use relative path.**
 
         Returns:
             Dict containing success status, message, and items in the directory
@@ -119,13 +123,17 @@ class Tools:
             return {"success": False, "message": f"Failed to list directory: {str(e)}"}
 
     @staticmethod
-    @tool(name="Delete File", description="Delete a file or directory")
+    @tool(
+        name="Delete File",
+        description="Delete a file or directory",
+        confirmation_required=True,
+    )
     def delete_file(path: str) -> Dict[str, Any]:
         """
         Delete a file or directory.
 
         Args:
-            path: The path to delete
+            path: The path to delete. **MUST use relative path.**
 
         Returns:
             Dict containing success status and message

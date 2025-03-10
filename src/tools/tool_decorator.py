@@ -18,6 +18,7 @@ class ParameterSpec:
 def tool(
     name_or_func: Optional[Union[str, Callable]] = None,
     description: Optional[str] = None,
+    confirmation_required: bool = False,
 ):
     """
     Decorator to mark a function as a tool and provide OpenAI API tools format metadata.
@@ -25,6 +26,7 @@ def tool(
     Args:
         name_or_func: Function or custom name for the tool
         description: Optional description (defaults to function docstring)
+        confirmation_required: Whether user confirmation is required before execution
 
     Returns:
         Decorated function with OpenAI tools metadata
@@ -37,13 +39,21 @@ def tool(
     name = name_or_func
 
     def decorator(func: Callable):
-        return _tool_impl(func, name=name, description=description)
+        return _tool_impl(
+            func,
+            name=name,
+            description=description,
+            confirmation_required=confirmation_required,
+        )
 
     return decorator
 
 
 def _tool_impl(
-    func: Callable, name: Optional[str] = None, description: Optional[str] = None
+    func: Callable,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    confirmation_required: bool = False,
 ):
     """
     Actual implementation of the tool decorator
@@ -52,6 +62,7 @@ def _tool_impl(
         func: The function to decorate
         name: Optional custom name for the tool
         description: Optional description
+        confirmation_required: Whether user confirmation is required before execution
     """
     func_name = name or func.__name__
     signature = inspect.signature(func)
@@ -104,6 +115,7 @@ def _tool_impl(
     wrapper.tool_name = func_name
     wrapper.tool_description = func_description
     wrapper.tool_parameters = params
+    wrapper.confirmation_required = confirmation_required
 
     # Add a method to get OpenAI format
     def get_openai_schema():
@@ -123,7 +135,7 @@ def _tool_impl(
 
             properties[param.name] = param_schema
 
-        return {
+        schema = {
             "type": "function",
             "function": {
                 "name": func_name,
@@ -135,6 +147,12 @@ def _tool_impl(
                 },
             },
         }
+
+        # Add confirmation metadata if required
+        if confirmation_required:
+            schema["function"]["confirmation_required"] = True
+
+        return schema
 
     wrapper.get_openai_schema = get_openai_schema
     return wrapper

@@ -38,6 +38,27 @@ def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             and method.is_tool
             and method.tool_name == tool_name
         ):
+            # Check if confirmation is required
+            if (
+                hasattr(method, "confirmation_required")
+                and method.confirmation_required
+            ):
+                # Format arguments as a readable string
+                args_str = ", ".join(f"{k}={repr(v)}" for k, v in arguments.items())
+
+                # Ask for confirmation
+                confirmation = input(
+                    f"Do you want to execute {tool_name}({args_str})? (y/n): "
+                )
+
+                # Check if user confirmed
+                if confirmation.lower() not in ["y", "yes"]:
+                    return {
+                        "success": False,
+                        "message": "Tool execution cancelled by user",
+                    }
+
+            # Execute the tool if confirmed or if no confirmation required
             return method(**arguments)
 
     return {"success": False, "message": f"Unknown tool: {tool_name}"}
