@@ -1,5 +1,6 @@
 """
-Initialize different agents.
+This module contains the Role class that represents an agent role in a chat session.
+It provides methods to interact with the OpenAI chat API and handle chat interactions.
 """
 
 import os

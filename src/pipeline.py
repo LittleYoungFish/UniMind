@@ -1,6 +1,5 @@
 """
-LLM-Agent Workflow Pipeline
-Orchestrates the flow between different LLM-based agents and workflows.
+Pipeline module for orchestrating the flow of data through a series of agents.
 """
 
 import logging
