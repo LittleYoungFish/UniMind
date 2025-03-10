@@ -1,4 +1,4 @@
-from .executor import Executor
+from .executor import Executor, AgentType
 
 
-__all__ = ["Executor"]
+__all__ = ["Executor", "AgentType"]

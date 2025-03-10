@@ -3,16 +3,9 @@ Pipeline module for orchestrating the flow of data through a series of agents.
 """
 
 import logging
-from enum import Enum
-from src.context import Context
+from context import Context
+from execution import AgentType
 from typing import Dict, List, Any, Optional, Callable
-
-
-class AgentType(Enum):
-    """Enumeration of available agent types in the pipeline."""
-
-    CUSTOM = "custom"
-    # TODO Add agent type
 
 
 class PipelineStage:

@@ -4,11 +4,18 @@ It provides methods to interact with the OpenAI chat API and handle query execut
 """
 
 import json
+from enum import Enum
 from openai import OpenAI
-from dotenv import load_dotenv
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, asdict, field
 from openai.types.chat.chat_completion import ChatCompletion
+
+
+class AgentType(Enum):
+    """Enumeration of available agent types in the pipeline."""
+
+    CUSTOM = "custom"
+    # TODO Add agent type
 
 
 @dataclass

@@ -8,7 +8,8 @@ import json
 import logging
 import argparse
 from typing import Dict, Any
-from pipeline.pipeline import Pipeline, ConditionalPipeline, PipelineStage, AgentType
+from execution import AgentType
+from pipeline import Pipeline, ConditionalPipeline, PipelineStage
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
