@@ -1,3 +1,3 @@
-from .tasks import Task, ITask
+from .definition import Task
 
-__all__ = ["Task", "ITask"]
+__all__ = ["Task"]
