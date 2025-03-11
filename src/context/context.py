@@ -2,13 +2,19 @@
 Context module for managing state and data flow throughout the pipeline execution.
 """
 
-from typing import Any, Dict, Optional
+import json
+from execution import Executor
+from typing import Any, Dict, List, Optional
 
 
 class Context:
     """
     Context class that manages the state and data flow throughout pipeline execution.
     """
+
+    root_dir: str
+    executor: Executor = None
+    history: List[Dict[str, Any]] = []
 
     def __init__(self, initial_data: Optional[Dict[str, Any]] = None):
         """
@@ -107,3 +113,17 @@ class Context:
         """Clear all data from the context."""
         self._data.clear()
         self._metadata.clear()
+
+    def format_context(self) -> str:
+        """
+        Format the context for use in the message generation process.
+
+        Returns:
+            The formatted context
+        """
+        # TODO: Implement this method
+        return json.dumps(self._data)
+
+    def is_root_dir_set(self) -> bool:
+        """Check if the root directory is set in the context."""
+        return self.root_dir is not None

@@ -3,22 +3,15 @@ This module contains the Executor class that represents an agent executing tasks
 It provides methods to interact with the OpenAI chat API and handle query execution.
 """
 
-import json
+import os
 from task import Task
-from enum import Enum
 from openai import OpenAI
 from context import Context
+from dotenv import load_dotenv
 from prompt import DEFAULT_SYSTEM_MESSAGE
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, asdict, field
 from openai.types.chat.chat_completion import ChatCompletion
-
-
-class AgentType(Enum):
-    """Enumeration of available agent types in the pipeline."""
-
-    CUSTOM = "custom"
-    # TODO Add agent type
 
 
 @dataclass
@@ -28,13 +21,10 @@ class ExecutorGenerationParams:
     None values represent parameters that are default to the API.
     """
 
-    stop: Optional[str] = None
     top_p: Optional[float] = None
     max_tokens: Optional[int] = None
     tools: Optional[List[Dict]] = None
     temperature: Optional[float] = None
-    frequency_penalty: Optional[float] = None
-    max_completion_tokens: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, excluding None values."""
@@ -48,9 +38,8 @@ class ExecutorConfig:
     """
 
     api_key: str
-    model: str
+    default_model: str
     base_url: Optional[str] = None
-    system_message: Optional[str] = None
     generation_params: ExecutorGenerationParams = field(
         default_factory=ExecutorGenerationParams
     )
@@ -58,58 +47,55 @@ class ExecutorConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary for serialization."""
         result = {
-            "api_key": self.api_key,
-            "model": self.model,
+            "api_key": "REDACTED" if self.api_key else None,
+            "default_model": self.default_model,
+            "base_url": self.base_url,
+            "generation_params": self.generation_params.to_dict(),
         }
-        if self.base_url:
-            result["base_url"] = self.base_url
-
-        if self.system_message:
-            result["system_message"] = self.system_message
-
-        gen_params = self.generation_params.to_dict()
-        if gen_params:
-            result["generation_params"] = gen_params
-
         return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExecutorConfig":
         """Create configuration from dictionary."""
-        gen_params = ExecutorGenerationParams()
-        if "generation_params" in data:
-            for key, value in data["generation_params"].items():
-                if hasattr(gen_params, key):
-                    setattr(gen_params, key, value)
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("API key is required, please set OPENAI_API_KEY")
 
         return cls(
-            api_key=data["api_key"],
-            model=data["model"],
-            base_url=data.get("base_url"),
-            system_message=data.get("system_message"),
-            generation_params=gen_params,
+            api_key=api_key,
+            default_model=data["default_model"],
+            base_url=data["base_url"],
+            generation_params=ExecutorGenerationParams(**data["generation_params"]),
         )
 
-    def save_to_file(self, filepath: str) -> None:
-        """Save configuration to a JSON file."""
-        with open(filepath, "w") as f:
-            config_dict = self.to_dict()
-            config_dict["api_key"] = "***"  # Masked for security
-            json.dump(config_dict, f, indent=2)
-
     @classmethod
-    def load_from_file(
-        cls, filepath: str, api_key: Optional[str] = None
-    ) -> "ExecutorConfig":
-        """Load configuration from a JSON file."""
-        with open(filepath, "r") as f:
-            data = json.load(f)
+    def from_env(cls) -> "ExecutorConfig":
+        """Create configuration from environment variables."""
+        load_dotenv()
 
-        # If API key is provided, use it instead of the one in the file
-        if api_key:
-            data["api_key"] = api_key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("API key is required, please set OPENAI_API_KEY")
 
-        return cls.from_dict(data)
+        default_model = os.getenv("CODER_DEFAULT_MODEL")
+        base_url = os.getenv("OPENAI_BASE_URL")
+
+        max_tokens = os.getenv("CODER_MAX_TOKENS")
+        top_p = os.getenv("CODER_TOP_P")
+        temperature = os.getenv("CODER_TEMPERATURE")
+
+        generation_params = ExecutorGenerationParams(
+            max_tokens=int(max_tokens) if max_tokens else None,
+            top_p=float(top_p) if top_p else None,
+            temperature=float(temperature) if temperature else None,
+        )
+
+        return cls(
+            api_key=api_key,
+            default_model=default_model,
+            base_url=base_url,
+            generation_params=generation_params,
+        )
 
 
 @dataclass
@@ -142,29 +128,26 @@ class Executor:
         Raises:
             ValueError: If the API key is not provided or the model is not specified.
         """
-
         # Initialize with config if provided, otherwise load from env
-        if config:
-            self.config = config
-        else:
-            self.config = ExecutorConfig.from_env()
-
+        self.config = config if config else ExecutorConfig.from_env()
         if not self.config.api_key:
             raise ValueError("API key is required")
 
         # Initialize OpenAI client
         self.client = OpenAI(api_key=self.config.api_key, base_url=self.config.base_url)
 
-    def execute(
-        self, task: Task, context: Context, **generation_params
-    ) -> Dict[str, Any]:
+    @classmethod
+    def from_env(cls) -> "Executor":
+        """Create an executor from environment variables."""
+        return cls(config=ExecutorConfig.from_env())
+
+    def execute(self, task: Task, context: Context) -> Context:
         """
         Executes a task.
 
         Args:
             task: The Task instance containing the task description and metadata
             context: Contextual information
-            **generation_params: Additional parameters for the generation process
 
         Returns:
            Dict[str, Any]: The response from the model containing the generated text and usage statistics.
@@ -173,21 +156,16 @@ class Executor:
             ValueError: If an unsupported generation parameter is provided.
         """
         system_message = task.background or DEFAULT_SYSTEM_MESSAGE
+        model = task.model or self.config.default_model
         query = task.description
         task.status = "in_progress"
 
         # Merge default generation params from config with override params
         merged_params = self.config.generation_params.to_dict()
-        merged_params.update(generation_params)
+        merged_params.update(task.agent_config)
 
         # Prepare context for the message
-        context_content = ""
-        if context:
-            context_content = "Context:\n" + "\n".join(
-                [f"{k}: {v}" for k, v in context.items()]
-            )
-            if context_content:
-                query = f"{context_content}\n\nQuery: {query}"
+        formatted_context = context.format_context()
 
         try:
             response: ChatCompletion = self.client.chat.completions.create(
@@ -195,7 +173,7 @@ class Executor:
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": query},
                 ],
-                model=self.config.model,
+                model=model,
                 **merged_params,
             )
 
@@ -213,7 +191,10 @@ class Executor:
             }
 
             task.set_result(result)
-            return result
+
+            # Update context with task result
+            context[f"task_{task.get_name()}_result"] = result
+            return context
 
         except Exception as e:
             task.set_failed(str(e))

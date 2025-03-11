@@ -2,7 +2,7 @@
 Pipeline module for orchestrating the flow of data through a series of agents.
 """
 
-from stage import IStage
+from stage import Stage
 from context import Context
 from typing import List, Optional
 from dataclasses import dataclass, field
@@ -16,7 +16,7 @@ class Pipeline:
 
     name: str
     description: Optional[str] = None
-    stages: List[IStage] = field(default_factory=list)
+    stages: List[Stage] = field(default_factory=list)
     context: Context = field(default_factory=Context)
 
     def __post_init__(self):
@@ -24,7 +24,10 @@ class Pipeline:
         if not self.name:
             raise ValueError("Pipeline name is required")
 
-    def add_stage(self, *stages: IStage) -> "Pipeline":
+    def register_executor(self, executor):
+        self.context.executor = executor
+
+    def add_stage(self, *stages: Stage) -> "Pipeline":
         """
         Add one or more stages to the pipeline.
 
@@ -49,12 +52,10 @@ class Pipeline:
         """
         for i, stage in enumerate(self.stages):
             try:
-                context_dict = self.context.to_dict()
-                updated_context = stage.execute(context_dict)
-                self.context.update(updated_context)
-                self.context.set_metadata("last_executed_stage", stage.get_name())
+                self.context = stage.execute(self.context)
+                self.context.set_metadata("last_executed_stage", stage.name)
             except Exception as e:
-                self.context.set_metadata("failed_stage", stage.get_name())
+                self.context.set_metadata("failed_stage", stage.name)
                 self.context.set_metadata("error", str(e))
                 raise
 

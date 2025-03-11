@@ -1,3 +1,4 @@
-from .stages import IStage, Stage, ConditionalStage
+from .definition import Stage
+from .stages import design_stage
 
-__all__ = ["IStage", "Stage", "ConditionalStage"]
+__all__ = ["Stage", "design_stage"]
