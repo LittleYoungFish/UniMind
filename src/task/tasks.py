@@ -1,29 +1,9 @@
-from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
 from dataclasses import dataclass, field
-from typing import Any, List, Dict, Optional
-
-
-class ITask(ABC):
-    """Interface for all tasks in the system."""
-
-    @abstractmethod
-    def execute(self, context: Dict[str, Any]) -> Any:
-        """Execute the task and return the result."""
-        pass
-
-    @abstractmethod
-    def get_status(self) -> str:
-        """Get the current status of the task."""
-        pass
-
-    @abstractmethod
-    def get_name(self) -> str:
-        """Get the name of the task."""
-        pass
 
 
 @dataclass
-class Task(ITask):
+class Task:
     """Base class representing a task that needs to be performed by an agent.
 
     A task encapsulates the work that needs to be done and tracks the result of its execution.
@@ -35,6 +15,8 @@ class Task(ITask):
     description: str
     # Background information of the task, will be used as system message for the agent
     background: Optional[str] = None
+    # Model to use for this task, if not provided, the default model will be used
+    model: Optional[str] = None
     # Whether to allow to use a tool for this task
     use_tool: bool = False
     # Result of the task execution
@@ -71,31 +53,11 @@ class Task(ITask):
         """Check if the task has failed."""
         return self.status == "failed"
 
-    def _enrich_description(self, context: Dict[str, Any]) -> str:
-        """Enrich the task description with context information if needed."""
-        return self.description  # TODO: Implement this method
-
     def __str__(self) -> str:
         """String representation of the task."""
         return f"Task({self.name}, status={self.status})"
 
-
-@dataclass
-class TaskGroup(ITask):
-    """A group of tasks that can be executed together."""
-
-    name: str
-    tasks: List[ITask] = field(default_factory=list)
-    status: str = "pending"
-
-    def add_task(self, task: ITask) -> None:
-        """Add a task to the group."""
-        self.tasks.append(task)
-
-    def remove_task(self, task_name: str) -> None:
-        """Remove a task from the group by name."""
-        self.tasks = [task for task in self.tasks if task.get_name() != task_name]
-
-    def __str__(self) -> str:
-        """String representation of the task group."""
-        return f"TaskGroup({self.name}, tasks={len(self.tasks)}, status={self.status})"
+    @classmethod
+    def from_dict(cls, task_dict: Dict[str, Any]) -> "Task":
+        """Create a Task instance from a dictionary."""
+        return cls(**task_dict)
