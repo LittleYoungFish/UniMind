@@ -1,3 +1,3 @@
-from .prompt import ARCHITECT_PROMPT
+from .prompt import ARCHITECT_PROMPT, DEFAULT_SYSTEM_MESSAGE
 
-__all__ = ["ARCHITECT_PROMPT"]
+__all__ = ["ARCHITECT_PROMPT", "DEFAULT_SYSTEM_MESSAGE"]

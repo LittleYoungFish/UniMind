@@ -4,9 +4,12 @@ It provides methods to interact with the OpenAI chat API and handle query execut
 """
 
 import json
+from task import Task
 from enum import Enum
 from openai import OpenAI
-from typing import Optional, Dict, Any
+from context import Context
+from prompt import DEFAULT_SYSTEM_MESSAGE
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, asdict, field
 from openai.types.chat.chat_completion import ChatCompletion
 
@@ -28,6 +31,7 @@ class ExecutorGenerationParams:
     stop: Optional[str] = None
     top_p: Optional[float] = None
     max_tokens: Optional[int] = None
+    tools: Optional[List[Dict]] = None
     temperature: Optional[float] = None
     frequency_penalty: Optional[float] = None
     max_completion_tokens: Optional[int] = None
@@ -118,29 +122,15 @@ class ExecutionUsage:
     completion: int
 
 
-@dataclass
-class ExecutionResult:
-    """
-    Dataclass to represent a result from the model execution.
-    """
-
-    content: str
-    usage: ExecutionUsage
-
-    def __str__(self):
-        return f"<ExecutionResult> ({self.content[:50]})"
-
-
 class Executor:
     """
     Class to represent an executor agent that processes queries through an LLM.
     """
 
-    model: str
     config: ExecutorConfig
     client: OpenAI
 
-    def __init__(self, config: Optional[ExecutorConfig] = None, model: str = None):
+    def __init__(self, config: Optional[ExecutorConfig] = None):
         """
         Initialize the Executor class with a prompt and configuration.
 
@@ -159,118 +149,72 @@ class Executor:
         else:
             self.config = ExecutorConfig.from_env()
 
-        # Override model if provided
-        if model:
-            self.model = model
-        else:
-            self.model = self.config.model
-
         if not self.config.api_key:
             raise ValueError("API key is required")
 
         # Initialize OpenAI client
         self.client = OpenAI(api_key=self.config.api_key, base_url=self.config.base_url)
 
-    @classmethod
-    def from_config_file(
-        cls,
-        config_file: str,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-    ):
+    def execute(
+        self, task: Task, context: Context, **generation_params
+    ) -> Dict[str, Any]:
         """
-        Initialize the Executor from a configuration file.
-
-        Parameters:
-            prompt (str): The initial prompt for the executor.
-            config_file (str): Path to the configuration file.
-            api_key (str, optional): API key to override the one in config file.
-            model (str, optional): Model to override the one in config file.
-
-        Returns:
-            Executor: An initialized executor instance.
-        """
-        config = ExecutorConfig.load_from_file(config_file, api_key)
-        if model:
-            config.model = model
-        return cls(config=config)
-
-    @classmethod
-    def from_params(
-        cls,
-        prompt: str,
-        api_key: str,
-        model: str,
-        base_url: Optional[str] = None,
-        **generation_params,
-    ):
-        """
-        Initialize the Executor with explicit parameters.
-
-        Parameters:
-            prompt (str): The initial prompt for the executor.
-            api_key (str): The OpenAI API key.
-            model (str): The model to use.
-            base_url (str, optional): Base URL for API requests.
-            **generation_params: Additional parameters for generation.
-
-        Returns:
-            Executor: An initialized executor instance.
-        """
-        gen_params = ExecutorGenerationParams()
-        for key, value in generation_params.items():
-            if hasattr(gen_params, key):
-                setattr(gen_params, key, value)
-
-        config = ExecutorConfig(
-            api_key=api_key,
-            model=model,
-            base_url=base_url,
-            generation_params=gen_params,
-        )
-        return cls(prompt=prompt, config=config)
-
-    def execute(self, query: str, **generation_params) -> ExecutionResult:
-        """
-        Executes the query against the specified model.
+        Executes a task.
 
         Args:
-            query (str): The user's query or task to execute.
-            **generation_params: Additional parameters for the generation process.
+            task: The Task instance containing the task description and metadata
+            context: Contextual information
+            **generation_params: Additional parameters for the generation process
 
         Returns:
-           ExecutionResult: The response from the model.
+           Dict[str, Any]: The response from the model containing the generated text and usage statistics.
 
         Raises:
             ValueError: If an unsupported generation parameter is provided.
         """
-        for param in generation_params.keys():
-            if param not in self.ALLOWED_GEN_PARAM:
-                raise ValueError(f"Generation param {param} not implemented yet")
+        system_message = task.background or DEFAULT_SYSTEM_MESSAGE
+        query = task.description
+        task.status = "in_progress"
 
         # Merge default generation params from config with override params
         merged_params = self.config.generation_params.to_dict()
         merged_params.update(generation_params)
 
-        # Use system_message from config if available, otherwise use the prompt
-        system_content = self.config.system_message or ""
+        # Prepare context for the message
+        context_content = ""
+        if context:
+            context_content = "Context:\n" + "\n".join(
+                [f"{k}: {v}" for k, v in context.items()]
+            )
+            if context_content:
+                query = f"{context_content}\n\nQuery: {query}"
 
-        response: ChatCompletion = self.client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": query},
-            ],
-            model=self.model,
-            **merged_params,
-        )
+        try:
+            response: ChatCompletion = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": query},
+                ],
+                model=self.config.model,
+                **merged_params,
+            )
 
-        return ExecutionResult(
-            response.choices[0].message.content,
-            usage=ExecutionUsage(
-                response.usage.prompt_tokens, response.usage.completion_tokens
-            ),
-        )
+            # If tool calls are present, extract them from response
+            if response.tool_calls:
+                task.metadata["tool_calls"] = response.tool_calls
 
-    def save_config(self, filepath: str) -> None:
-        """Save the current configuration to a file."""
-        self.config.save_to_file(filepath)
+            # Assemble the result from the response
+            result = {
+                "response": response.choices[0].message.content,
+                "usage": ExecutionUsage(
+                    prompt=response.usage.prompt_tokens,
+                    completion=response.usage.completion_tokens,
+                ),
+            }
+
+            task.set_result(result)
+            return result
+
+        except Exception as e:
+            task.set_failed(str(e))
+            raise
