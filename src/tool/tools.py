@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 class Tools:
     @staticmethod
-    @tool(name="Create File", description="Create a file with the specified content")
+    @tool("create_file", description="Create a file with the specified content")
     def create_file(path: str, content: str) -> Dict[str, Any]:
         """
         Create a file with the specified content.
@@ -35,7 +35,7 @@ class Tools:
             return {"success": False, "message": f"Failed to create file: {str(e)}"}
 
     @staticmethod
-    @tool(name="Read File", description="Read the content of a file")
+    @tool("read_file", description="Read the content of a file")
     def read_file(path: str) -> Dict[str, Any]:
         """
         Read and return the content of a file.
@@ -63,7 +63,7 @@ class Tools:
 
     @staticmethod
     @tool(
-        name="Execute Command",
+        "execute_command",
         description="Execute a shell command",
         confirmation_required=True,
     )
@@ -94,7 +94,7 @@ class Tools:
             return {"success": False, "message": f"Failed to execute command: {str(e)}"}
 
     @staticmethod
-    @tool(name="List Directory", description="List contents of a directory")
+    @tool("list_directory", description="List contents of a directory")
     def list_directory(path: str = ".") -> Dict[str, Any]:
         """
         List contents of a directory.
@@ -124,7 +124,7 @@ class Tools:
 
     @staticmethod
     @tool(
-        name="Delete File",
+        "delete_file",
         description="Delete a file or directory",
         confirmation_required=True,
     )
