@@ -1,4 +1,4 @@
-from .executor import Executor, ExecutionUsage
+from .executor import Executor, ExecutionUsage, GenerationParams
 
 
-__all__ = ["Executor", "ExecutionUsage"]
+__all__ = ["Executor", "ExecutionUsage", "GenerationParams"]

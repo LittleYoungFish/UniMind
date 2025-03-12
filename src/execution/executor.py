@@ -4,18 +4,20 @@ It provides methods to interact with the OpenAI chat API and handle query execut
 """
 
 import os
+import json
 from task import Task
 from openai import OpenAI
 from context import Context
 from dotenv import load_dotenv
 from prompt import DEFAULT_SYSTEM_MESSAGE
+from tool import get_all_tools, execute_tool
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, asdict, field
-from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.chat.chat_completion import ChatCompletion, ChatCompletionMessage
 
 
 @dataclass
-class ExecutorGenerationParams:
+class GenerationParams:
     """
     Dataclass to represent the generation parameters for the Executor class.
     None values represent parameters that are default to the API.
@@ -40,9 +42,7 @@ class ExecutorConfig:
     api_key: str
     default_model: str
     base_url: Optional[str] = None
-    generation_params: ExecutorGenerationParams = field(
-        default_factory=ExecutorGenerationParams
-    )
+    generation_params: GenerationParams = field(default_factory=GenerationParams)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary for serialization."""
@@ -65,7 +65,7 @@ class ExecutorConfig:
             api_key=api_key,
             default_model=data["default_model"],
             base_url=data["base_url"],
-            generation_params=ExecutorGenerationParams(**data["generation_params"]),
+            generation_params=GenerationParams(**data["generation_params"]),
         )
 
     @classmethod
@@ -77,14 +77,14 @@ class ExecutorConfig:
         if not api_key:
             raise ValueError("API key is required, please set OPENAI_API_KEY")
 
-        default_model = os.getenv("CODER_DEFAULT_MODEL")
         base_url = os.getenv("OPENAI_BASE_URL")
+        default_model = os.getenv("AM_DEFAULT_MODEL")
 
-        max_tokens = os.getenv("CODER_MAX_TOKENS")
-        top_p = os.getenv("CODER_TOP_P")
-        temperature = os.getenv("CODER_TEMPERATURE")
+        max_tokens = os.getenv("AM_MAX_TOKENS")
+        top_p = os.getenv("AM_TOP_P")
+        temperature = os.getenv("AM_DEFAULT_TEMPERATURE")
 
-        generation_params = ExecutorGenerationParams(
+        generation_params = GenerationParams(
             max_tokens=int(max_tokens) if max_tokens else None,
             top_p=float(top_p) if top_p else None,
             temperature=float(temperature) if temperature else None,
@@ -155,17 +155,16 @@ class Executor:
         Raises:
             ValueError: If an unsupported generation parameter is provided.
         """
-        system_message = task.background or DEFAULT_SYSTEM_MESSAGE
-        model = task.model or self.config.default_model
-        query = task.description
+        system_message = task.agent.background or DEFAULT_SYSTEM_MESSAGE
+        model = task.agent.model or self.config.default_model
+        query = task.input
         task.status = "in_progress"
 
         # Merge default generation params from config with override params
         merged_params = self.config.generation_params.to_dict()
-        merged_params.update(task.agent_config)
-
-        # Prepare context for the message
-        formatted_context = context.format_context()
+        merged_params.update(task.agent.config or {})
+        if task.agent.use_tool:
+            merged_params["tools"] = get_all_tools()
 
         try:
             response: ChatCompletion = self.client.chat.completions.create(
@@ -176,10 +175,22 @@ class Executor:
                 model=model,
                 **merged_params,
             )
+            message: ChatCompletionMessage = response.choices[0].message
 
-            # If tool calls are present, extract them from response
-            if response.tool_calls:
-                task.metadata["tool_calls"] = response.tool_calls
+            if (
+                message.tool_calls
+                and len(message.tool_calls) > 0
+                and message.tool_calls[0]
+            ):
+                try:
+                    # Handle tool calls
+                    tool_call = message.tool_calls[0]
+                    func = tool_call.function
+
+                    # Execute the tool function
+                    tool_result = execute_tool(func.name, json.loads(func.arguments))
+                except:
+                    raise ValueError("Invalid tool call format")
 
             # Assemble the result from the response
             result = {

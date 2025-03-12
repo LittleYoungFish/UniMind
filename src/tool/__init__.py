@@ -38,6 +38,23 @@ def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             and method.is_tool
             and method.tool_name == tool_name
         ):
+            # Check if all required arguments are provided
+            missing_args = []
+            sig = inspect.signature(method)
+            for param_name, param in sig.parameters.items():
+                # Required params have no default and aren't variadic (*args, **kwargs)
+                if param.default is param.empty and param.kind not in (
+                    param.VAR_POSITIONAL,
+                    param.VAR_KEYWORD,
+                ):
+                    if param_name not in arguments:
+                        missing_args.append(param_name)
+            if missing_args:
+                return {
+                    "success": False,
+                    "message": f"Missing required arguments: {', '.join(missing_args)}",
+                }
+
             # Check if confirmation is required
             if (
                 hasattr(method, "confirmation_required")

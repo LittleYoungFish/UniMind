@@ -1,21 +1,25 @@
-from .definition import Task
-from .utils import save_result_to_file
+from execution import GenerationParams
+from .definition import Task, TaskAgent
 from prompt import DEMAND_ANALYST_PROMPT, ARCHITECT_PROMPT
 
 demand_analysis = Task(
     name="demand_analysis",
-    background=DEMAND_ANALYST_PROMPT,
-    use_tool=False,
-    agent_config={"temprature": 0.8},
+    agent=TaskAgent(
+        background=DEMAND_ANALYST_PROMPT,
+        use_tool=False,
+        config=GenerationParams(temperature=0.6),
+    ),
+    save_artifact=True,
     artifact_path="docs/demand_analysis.md",
-    post_execution=save_result_to_file,
 )
 
 architectural_design = Task(
     name="architectural_design",
-    background=ARCHITECT_PROMPT,
-    use_tool=False,
-    agent_config={"temprature": 0.5},
+    agent=TaskAgent(
+        background=ARCHITECT_PROMPT,
+        use_tool=False,
+        config=GenerationParams(temperature=0.5),
+    ),
+    save_artifact=True,
     artifact_path="docs/architectural_design.md",
-    post_execution=save_result_to_file,
 )

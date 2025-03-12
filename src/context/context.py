@@ -12,9 +12,12 @@ class Context:
     Context class that manages the state and data flow throughout pipeline execution.
     """
 
+    raw_demand: str
+    budget: float
     root_dir: str
     executor: Executor = None
     history: List[Dict[str, Any]] = []
+    artifacts: List[str] = []
 
     def __init__(self, initial_data: Optional[Dict[str, Any]] = None):
         """
