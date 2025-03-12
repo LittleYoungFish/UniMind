@@ -1,8 +1,8 @@
-# Project-Coder
+# Agile Mind
 
 ## Overview
 
-Project-Coder is an innovative platform that leverages Large Language Models (LLMs) to create a collaborative multi-agent system for software development. Our platform enables automated code generation, testing, and optimization through specialized AI agents working in concert.
+Agile Mind is an innovative platform that leverages Large Language Models (LLMs) to create a collaborative multi-agent system for software development. Our platform enables automated code generation, testing, and optimization through specialized AI agents working in concert.
 
 ## Features
 
@@ -16,12 +16,12 @@ Project-Coder is an innovative platform that leverages Large Language Models (LL
 
 ```bash
 # Clone the repository
-git clone https://github.com/kcornw/Project-Coder.git
-cd Project-Coder
+git clone https://github.com/kcornw/AgileMind.git
+cd AgileMind
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the platform
-python main.py
+# Start developing
+python app.py "Create a 2048 game with UI"
 ```
