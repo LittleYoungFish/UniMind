@@ -22,6 +22,10 @@ cd AgileMind
 # Install dependencies
 pip install -r requirements.txt
 
+# Prepare environment variables
+cp .env.template .env
+# Then replace the placeholder values with your actual credentials
+
 # Start developing
 python app.py "Create a 2048 game with UI"
 ```
