@@ -1,6 +1,21 @@
+"""
+Agent module for creating agents that can process inputs, use tools, and hand off to other agents.
+"""
+
+import os
 import json
 import openai
+from tool import execute_tool
+from dotenv import load_dotenv
 from typing import List, Optional, Dict
+
+
+load_dotenv()
+
+client = openai.OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_API_BASE_URL"),
+)
 
 
 class Agent:
@@ -14,6 +29,7 @@ class Agent:
     def __init__(
         self,
         name: str,
+        description: str,
         instructions: str,
         tools: Optional[List[Dict[str, str]]] = None,
         handoffs: Optional[List["Agent"]] = None,
@@ -23,13 +39,14 @@ class Agent:
         Initialize an Agent instance.
 
         Args:
-            name: The name of the agent.
+            name: The name of the agent. Should be unique, lowercase, and without spaces.
             instructions: Instructions that define the agent's behavior.
             tools: Optional list of tools the agent can use.
             handoffs: Optional list of agents this agent can hand off to.
             model: OpenAI model to use for this agent
         """
         self.name = name
+        self.description = description
         self.instructions = instructions
         self.tools = tools or []
         self.handoffs = handoffs or []
@@ -60,27 +77,24 @@ class Agent:
         """
         messages = self._prepare_messages(input_text)
 
-        # Prepare tools for OpenAI API
-        tools = [tool.to_dict() for tool in self.tools]
-
         # Add handoff agents as tools
         for agent in self.handoffs:
-            tools.append(
+            self.tools.append(
                 {
                     "type": "function",
                     "function": {
-                        "name": f"handoff_to_{agent.name.lower().replace(' ', '_')}",
-                        "description": f"Hand off the conversation to the {agent.name} agent",
+                        "name": f"handoff_to_{agent.name}",
+                        "description": f"Hand off the conversation to the {agent.name} agent. The agent is specialized in {agent.description}.",
                         "parameters": {"type": "object", "properties": {}},
                     },
                 }
             )
 
         # Call OpenAI API
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model=self.model,
             messages=messages,
-            tools=tools if tools else None,
+            tools=self.tools if self.tools else None,
             tool_choice="auto",
         )
 
@@ -104,11 +118,9 @@ class Agent:
 
                 # Check if this is a handoff
                 if tool_name.startswith("handoff_to_"):
-                    target_agent_name = tool_name[len("handoff_to_") :].replace(
-                        "_", " "
-                    )
+                    target_agent_name = tool_name[len("handoff_to_") :]
                     for agent in self.handoffs:
-                        if agent.name.lower() == target_agent_name:
+                        if agent.name == target_agent_name:
                             result["handoff"] = agent
                             break
                 else:
@@ -116,7 +128,7 @@ class Agent:
                     for tool in self.tools:
                         if tool.name == tool_name:
                             args = json.loads(tool_call.function.arguments)
-                            tool_result = tool(**args)
+                            tool_result = execute_tool(tool_name, args)
                             result["tool_calls"].append(
                                 {"tool": tool_name, "args": args, "result": tool_result}
                             )
