@@ -95,7 +95,6 @@ class Agent:
             model=self.model,
             messages=messages,
             tools=self.tools if self.tools else None,
-            tool_choice="auto",
         )
 
         response_message = response.choices[0].message

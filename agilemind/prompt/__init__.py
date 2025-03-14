@@ -1,3 +1,5 @@
-from .prompt import ARCHITECT_PROMPT, DEFAULT_SYSTEM_MESSAGE, DEMAND_ANALYST_PROMPT
+from . import waterfall as waterfall_prompt
 
-__all__ = ["ARCHITECT_PROMPT", "DEFAULT_SYSTEM_MESSAGE", "DEMAND_ANALYST_PROMPT"]
+DEFAULT_SYSTEM_MESSAGE = """You are a helpful assistant."""
+
+__all__ = ["DEFAULT_SYSTEM_MESSAGE", "waterfall_prompt"]

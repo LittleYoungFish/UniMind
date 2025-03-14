@@ -3,6 +3,7 @@ Main entry point for the LLM-Agent workflow pipelines.
 """
 
 import argparse
+from .waterfall import dev
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,20 +25,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run(demand: str, output: str) -> None:
-    """
-    Run the LLM-Agent workflow pipelines.
-
-    Args:
-        demand: Demand of the software to be developed
-        output: Directory path to save the software
-    """
-    pass
-
-
-def main() -> None:
+def entry() -> None:
     """
     Main entry point for the CLI.
     """
     args = parse_args()
-    run(**vars(args))
+    dev(**vars(args))
