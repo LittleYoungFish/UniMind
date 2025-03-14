@@ -29,23 +29,23 @@ quality_assurance = Agent(
 )
 
 
-def dev(user_demand: str, output_dir: str) -> dict:
+def dev(demand: str, output: str) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
 
     Args:
-        user_demand: User demand for the software
-        output_dir: Directory path to save the software
+        demand: User demand for the software
+        output: Directory path to save the software
 
     Returns:
         Dictionary containing the software development process
     """
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    Path(output).mkdir(parents=True, exist_ok=True)
 
     runner = Runner()
-    result = runner.run(demand_analyst, user_demand, 5)
+    result = runner.run(demand_analyst, demand, 5)
 
-    with open(f"{output_dir}/output.txt", "w") as f:
+    with open(f"{output}/output.txt", "w") as f:
         f.write(json.dumps(result, indent=4))
 
     return result
