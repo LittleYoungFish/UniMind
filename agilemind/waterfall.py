@@ -4,28 +4,28 @@ from prompt import waterfall_prompt
 from execution import Agent, Runner
 
 
-demand_analyst = Agent(
-    "demand_analyst",
-    "analyze user demand",
-    waterfall_prompt.DEMAND_ANALYST_PROMPT,
-)
-architect = Agent(
-    "architect",
-    "create software architecture",
-    waterfall_prompt.ARCHITECT_PROMPT,
-    handoffs=[demand_analyst],
+quality_assurance = Agent(
+    "quality_assurance",
+    "assure software quality",
+    waterfall_prompt.QUALITY_ASSURANCE_PROMPT,
 )
 programmer = Agent(
     "programmer",
     "implement software",
     waterfall_prompt.PROGRAMER_PROMPT,
-    handoffs=[architect],
+    next_agent=quality_assurance,  # Force handoff to QA
 )
-quality_assurance = Agent(
-    "quality_assurance",
-    "assure software quality",
-    waterfall_prompt.QUALITY_ASSURANCE_PROMPT,
-    handoffs=[programmer],
+architect = Agent(
+    "architect",
+    "create software architecture",
+    waterfall_prompt.ARCHITECT_PROMPT,
+    next_agent=programmer,  # Force handoff to programmer
+)
+demand_analyst = Agent(
+    "demand_analyst",
+    "analyze user demand",
+    waterfall_prompt.DEMAND_ANALYST_PROMPT,
+    next_agent=architect,  # Force handoff to architect
 )
 
 

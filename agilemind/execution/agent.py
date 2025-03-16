@@ -33,6 +33,7 @@ class Agent:
         instructions: str,
         tools: Optional[List[Dict[str, str]]] = None,
         handoffs: Optional[List["Agent"]] = None,
+        next_agent: Optional["Agent"] = None,  # Added next_agent for forced handoff
         model: str = "gpt-4o-mini",
     ):
         """
@@ -40,9 +41,11 @@ class Agent:
 
         Args:
             name: The name of the agent. Should be unique, lowercase, and without spaces.
+            description: Brief description of what the agent does
             instructions: Instructions that define the agent's behavior.
             tools: Optional list of tools the agent can use.
             handoffs: Optional list of agents this agent can hand off to.
+            next_agent: Optional next agent for forced handoff regardless of the agent's decision.
             model: OpenAI model to use for this agent
         """
         self.name = name
@@ -50,6 +53,7 @@ class Agent:
         self.instructions = instructions
         self.tools = tools or []
         self.handoffs = handoffs or []
+        self.next_agent = next_agent  # Store the next agent for forced handoff
         self.model = model
         self.history = []
 
@@ -132,6 +136,11 @@ class Agent:
                                 {"tool": tool_name, "args": args, "result": tool_result}
                             )
                             break
+
+        # Check if there's a forced handoff via next_agent, which takes precedence over
+        # any handoff the agent might have selected
+        if self.next_agent:
+            result["handoff"] = self.next_agent
 
         return result
 

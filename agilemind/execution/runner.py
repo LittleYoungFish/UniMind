@@ -45,10 +45,16 @@ class Runner:
                 {"agent": current_agent.name, "input": current_input, "output": result}
             )
 
-            # Check if there's a handoff
+            # Check if there's a handoff (could be from direct handoff or forced via next_agent)
             if result["handoff"]:
+                # Update the trace to indicate the handoff
+                execution_trace[-1]["handoff_to"] = result["handoff"].name
+                # Update current agent and use the previous agent's response as input for the new agent
                 current_agent = result["handoff"]
-                # Continue with the same input for the new agent
+                # Use previous agent's response as new input
+                current_input = result["content"]
+                # Reset the handoff to the new agent's name
+                result["handoff"] = result["handoff"].name
                 continue
 
             # If tool calls were made and need follow-up, we could handle that here
