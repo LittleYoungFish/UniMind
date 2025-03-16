@@ -35,6 +35,7 @@ class Agent:
         handoffs: Optional[List["Agent"]] = None,
         next_agent: Optional["Agent"] = None,  # Added next_agent for forced handoff
         model: str = "gpt-4o-mini",
+        save_path: Optional[str] = None,  # Path to save agent responses
     ):
         """
         Initialize an Agent instance.
@@ -47,6 +48,7 @@ class Agent:
             handoffs: Optional list of agents this agent can hand off to.
             next_agent: Optional next agent for forced handoff regardless of the agent's decision.
             model: OpenAI model to use for this agent
+            save_path: Optional path to save agent's responses for documentation purposes
         """
         self.name = name
         self.description = description
@@ -56,6 +58,7 @@ class Agent:
         self.next_agent = next_agent  # Store the next agent for forced handoff
         self.model = model
         self.history = []
+        self.save_path = save_path
 
     def __repr__(self) -> str:
         """Return string representation of the Agent."""
@@ -68,6 +71,23 @@ class Agent:
     def get_available_handoffs(self) -> List["Agent"]:
         """Return the list of agents this agent can hand off to."""
         return self.handoffs
+
+    def save_response(self, response_content: str) -> None:
+        """
+        Save the agent's response to the specified path.
+
+        Args:
+            response_content: The content to save to the file
+        """
+        if not self.save_path:
+            return
+
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
+
+        # Append to file if it exists, otherwise create it
+        with open(self.save_path, "a") as f:
+            f.write(response_content + "\n\n")
 
     def process(self, input_text: str) -> Dict:
         """
@@ -112,6 +132,10 @@ class Agent:
             "tool_calls": None,
             "handoff": None,
         }
+
+        # Save the response if a save path is specified
+        if self.save_path and response_message.content:
+            self.save_response(response_message.content)
 
         # Handle tool calls
         if hasattr(response_message, "tool_calls") and response_message.tool_calls:

@@ -3,6 +3,7 @@ Main entry point for the LLM-Agent workflow pipelines.
 """
 
 import argparse
+from .agile import dev as agile_dev
 from .waterfall import dev as waterfall_dev
 
 
@@ -34,7 +35,7 @@ def parse_args() -> argparse.Namespace:
         default="waterfall",
         choices=[
             "waterfall",
-            # "agile",
+            "agile",
         ],
         help="Pipeline type to use for development",
     )
@@ -51,3 +52,6 @@ def entry() -> None:
     if args["pipeline"] == "waterfall":
         args.pop("pipeline")
         waterfall_dev(**args)
+    else:
+        args.pop("pipeline")
+        agile_dev(**args)
