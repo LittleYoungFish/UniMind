@@ -2,6 +2,7 @@
 Runner module for managing the execution flow between agents.
 """
 
+import json
 from .agent import Agent
 from typing import Dict, Any
 
@@ -57,18 +58,13 @@ class Runner:
                 result["handoff"] = result["handoff"].name
                 continue
 
-            # If tool calls were made and need follow-up, we could handle that here
             if result["tool_calls"]:
-                # For now, just continue with the current agent if tools were used
-                tool_results = []
-                for tool_call in result["tool_calls"]:
-                    tool_results.append(
-                        f"Tool {tool_call['tool']} returned: {tool_call['result']}"
-                    )
+                # Add to the trace
+                execution_trace[-1]["tool_calls"] = result["tool_calls"]
 
-                if tool_results:
-                    current_input = f"The following tools were used: {' '.join(tool_results)}. Please continue."
-                    continue
+                # Format the tool results into a message to send back to the agent
+                current_input = f'Here are the results of executed tools:\n{json.dumps(result["tool_calls"])}\n\nPlease continue based on these results.'
+                continue
 
             # No handoffs or tool follow-ups needed, we're done
             return {

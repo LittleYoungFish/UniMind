@@ -8,7 +8,11 @@ from typing import Any, Dict, List, Optional
 
 class Tools:
     @staticmethod
-    @tool("create_file", description="Create a file with the specified content")
+    @tool(
+        "create_file",
+        description="Create a file with the specified content",
+        confirmation_required=True,
+    )
     def create_file(path: str, content: str) -> Dict[str, Any]:
         """
         Create a file with the specified content.
@@ -16,7 +20,7 @@ class Tools:
 
         Args:
             path: The path to the file to create. **MUST use relative path.**
-            content: The content to write to the file
+            content: The content to write to the file. When creating a code file, 'content' will be written derectly to the file so make sure it is a valid code.
 
         Returns:
             Dict containing success status and message
@@ -208,11 +212,11 @@ def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
                 and method.confirmation_required
             ):
                 # Format arguments as a readable string
-                args_str = ", ".join(f"{k}={repr(v)}" for k, v in arguments.items())
+                args_str = "\n".join(f"{k}={repr(v)}" for k, v in arguments.items())
 
                 # Ask for confirmation
                 confirmation = input(
-                    f"Do you want to execute {tool_name}({args_str})? (y/n): "
+                    f"Do you want to execute {tool_name}? (y/n)\n{args_str}"
                 )
 
                 # Check if user confirmed

@@ -3,7 +3,7 @@ Main entry point for the LLM-Agent workflow pipelines.
 """
 
 import argparse
-from .waterfall import dev
+from .waterfall import dev as waterfall_dev
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,4 +50,4 @@ def entry() -> None:
     args = vars(args)
     if args["pipeline"] == "waterfall":
         args.pop("pipeline")
-        dev(**args)
+        waterfall_dev(**args)

@@ -128,14 +128,11 @@ class Agent:
                             break
                 else:
                     # Execute the tool
-                    for tool in self.tools:
-                        if tool.name == tool_name:
-                            args = json.loads(tool_call.function.arguments)
-                            tool_result = execute_tool(tool_name, args)
-                            result["tool_calls"].append(
-                                {"tool": tool_name, "args": args, "result": tool_result}
-                            )
-                            break
+                    args = json.loads(tool_call.function.arguments)
+                    tool_result = execute_tool(tool_name, args)
+                    result["tool_calls"].append(
+                        {"tool": tool_name, "args": args, "result": tool_result}
+                    )
 
         # Check if there's a forced handoff via next_agent, which takes precedence over
         # any handoff the agent might have selected

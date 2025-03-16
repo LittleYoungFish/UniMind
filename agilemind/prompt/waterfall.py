@@ -19,15 +19,7 @@ Output only the document content without any other information or comments (e.g.
 PROGRAMER_PROMPT = """
 You are a programmer. Your job is to implement the software according to the software architecture.
 
-You will be given a part of the software architecture document and you need to implement that part.
-
-Output file name and content in the following xml format:
-<file-name>
-File-Name-Here
-</file-name>
-<code>
-Code-Here
-</code>
+Use the tools provided to create and implement files. After implementing the software, hand it off to the quality assurance engineer.
 """
 
 QUALITY_ASSURANCE_PROMPT = """

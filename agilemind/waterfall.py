@@ -1,8 +1,10 @@
+import os
 import json
+from typing import Dict
 from pathlib import Path
+from tool import get_all_tools
 from prompt import waterfall_prompt
 from execution import Agent, Runner
-
 
 quality_assurance = Agent(
     "quality_assurance",
@@ -13,8 +15,10 @@ programmer = Agent(
     "programmer",
     "implement software",
     waterfall_prompt.PROGRAMER_PROMPT,
-    next_agent=quality_assurance,  # Force handoff to QA
+    tools=get_all_tools(),
+    handoffs=[quality_assurance],
 )
+quality_assurance.next_agent = programmer
 architect = Agent(
     "architect",
     "create software architecture",
@@ -29,7 +33,7 @@ demand_analyst = Agent(
 )
 
 
-def dev(demand: str, output: str) -> dict:
+def dev(demand: str, output: str) -> Dict[str, str]:
     """
     Run the LLM-Agent workflow pipelines.
 
@@ -42,10 +46,17 @@ def dev(demand: str, output: str) -> dict:
     """
     Path(output).mkdir(parents=True, exist_ok=True)
 
-    runner = Runner()
-    result = runner.run(demand_analyst, demand, 5)
+    # Change current working directory to the output directory
+    initial_cwd = os.getcwd()
+    os.chdir(output)
 
-    with open(f"{output}/output.txt", "w") as f:
-        f.write(json.dumps(result, indent=4))
+    try:
+        runner = Runner()
+        result = runner.run(demand_analyst, demand, 5)
+
+        with open("trace.txt", "w") as f:
+            f.write(json.dumps(result, indent=4))
+    finally:
+        os.chdir(initial_cwd)  # Restore original working directory
 
     return result
