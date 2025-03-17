@@ -11,7 +11,6 @@ class Tools:
     @tool(
         "create_file",
         description="Create a file with the specified content",
-        confirmation_required=True,
     )
     def create_file(path: str, content: str) -> Dict[str, Any]:
         """
