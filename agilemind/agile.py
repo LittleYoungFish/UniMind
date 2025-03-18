@@ -8,6 +8,8 @@ from pathlib import Path
 from execution import Agent
 from tool import get_all_tools
 from prompt import agile_prompt
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
 
 quality_assurance = Agent(
     "quality_assurance",
@@ -51,24 +53,54 @@ def run_workflow(
     """
     result = {}
 
-    demand_analysis = demand_analyst.process(demand)
-    result["demand_analysis"] = demand_analysis
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        TimeElapsedColumn(),
+    ) as progress:
+        # Demand analysis step
+        demand_task = progress.add_task("Analyzing user demand...", total=1)
+        demand_analysis = demand_analyst.process(demand)
+        progress.update(
+            demand_task,
+            completed=1,
+            description="[bold green]✓ Demand analysis completed",
+        )
+        result["demand_analysis"] = demand_analysis
 
-    architecture = architect.process(json.dumps(demand_analysis))
-    # Convert the architecture from JSON format
-    architecture = json.loads(architecture["content"])
-    result["architecture"] = architecture
+        # Architecture step
+        arch_task = progress.add_task("Querying Architect...", total=1)
+        architecture = architect.process(json.dumps(demand_analysis))
+        # Convert the architecture from JSON format
+        architecture = json.loads(architecture["content"])
+        progress.update(
+            arch_task, completed=1, description="[bold green]✓ Architecture created"
+        )
+        result["architecture"] = architecture
 
-    modules = architecture["modules"]
-    for module in modules:
-        module_name = module["name"]
-        program = programmer.process(json.dumps(module))
+        modules = architecture["modules"]
+        for i, module in enumerate(modules):
+            module_name = module["name"]
 
-        # Save the module output
-        with open(f"docs/{module_name}.json", "w") as f:
-            f.write(json.dumps(program, indent=4))
+            # Use single task for implementation
+            impl_task = progress.add_task(
+                f"Implementing module: {module_name}...", total=1
+            )
+            program = programmer.process(json.dumps(module))
+            progress.update(
+                impl_task,
+                completed=1,
+                description=f"[bold green]✓ Module {module_name} implemented",
+            )
 
-        result[module_name] = program
+            with open(f"docs/{module_name}.json", "w") as f:
+                f.write(json.dumps(program, indent=4))
+
+            result[module_name] = program
+
+        progress.print(
+            f"[bold green]✓ Development completed! Check your software in {output}"
+        )
 
     return result
 
