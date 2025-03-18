@@ -98,10 +98,13 @@ class Tools:
             return {"success": False, "message": f"Failed to execute command: {str(e)}"}
 
     @staticmethod
-    @tool("list_directory", description="List contents of a directory")
+    @tool(
+        "list_directory",
+        description="List contents of a directory recursively, equivalent to 'ls -R <path>'",
+    )
     def list_directory(path: str = ".") -> Dict[str, Any]:
         """
-        List contents of a directory.
+        List all items in a directory recursively.
 
         Args:
             path: The path to list (defaults to current directory). **MUST use relative path.**
@@ -110,18 +113,19 @@ class Tools:
             Dict containing success status, message, and items in the directory
         """
         try:
-            items = os.listdir(path)
-            file_info = []
+            if not os.path.exists(path):
+                return {"success": False, "message": f"Path not found: {path}"}
 
-            for item in items:
-                item_path = os.path.join(path, item)
-                item_type = "directory" if os.path.isdir(item_path) else "file"
-                file_info.append({"name": item, "type": item_type})
+            items = []
+            for root, dirs, files in os.walk(path):
+                items.append(
+                    {"directory": root, "files": files, "subdirectories": dirs}
+                )
 
             return {
                 "success": True,
-                "message": f"Listed directory contents of {path}",
-                "items": file_info,
+                "message": f"Directory listed: {path}",
+                "items": items,
             }
         except Exception as e:
             return {"success": False, "message": f"Failed to list directory: {str(e)}"}
