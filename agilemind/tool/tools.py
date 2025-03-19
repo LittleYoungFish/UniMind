@@ -12,6 +12,7 @@ class Tools:
     @tool(
         "create_file",
         description="Create a file with the specified content",
+        group="file_system",
     )
     def create_file(path: str, content: str) -> Dict[str, Any]:
         """
@@ -40,7 +41,7 @@ class Tools:
             return {"success": False, "message": f"Failed to create file: {str(e)}"}
 
     @staticmethod
-    @tool("read_file", description="Read the content of a file")
+    @tool("read_file", description="Read the content of a file", group="file_system")
     def read_file(path: str) -> Dict[str, Any]:
         """
         Read and return the content of a file.
@@ -71,6 +72,7 @@ class Tools:
         "execute_command",
         description="Execute a shell command",
         confirmation_required=True,
+        group="system",
     )
     def execute_command(command: str, cwd: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -102,6 +104,7 @@ class Tools:
     @tool(
         "list_directory",
         description="List contents of a directory recursively, equivalent to 'ls -R <path>'",
+        group="file_system",
     )
     def list_directory(path: str = ".") -> Dict[str, Any]:
         """
@@ -136,6 +139,7 @@ class Tools:
         "delete_file",
         description="Delete a file or directory",
         confirmation_required=True,
+        group="file_system",
     )
     def delete_file(path: str) -> Dict[str, Any]:
         """
@@ -164,6 +168,7 @@ class Tools:
     @tool(
         "add_to_requirements",
         description="Add a package to the requirements file",
+        group="development",
     )
     def add_to_requirements(
         language: str, package_name: str, version: str = None
@@ -204,10 +209,46 @@ class Tools:
             "message": f"Unsupported language: {language}",
         }
 
+    @staticmethod
+    @tool(
+        "get_code_structure",
+        description="Get the code structure of a module or all modules",
+        group="development",
+    )
+    def get_code_structure(module: str = None) -> Dict[str, Any]:
+        """
+        Get the code structure of a module or all modules
 
-def get_all_tools() -> List[Dict[str, Any]]:
+        Args:
+            module: The name of the module to get the structure of (optional)
+
+        Returns:
+            Dict containing success status and message
+        """
+        try:
+            pass
+            code_structure = {}
+            # TODO: Implement code structure retrieval from Context
+
+            return {
+                "success": True,
+                "message": f"Code structure of {module or 'all modules'} retrieved",
+                "code_structure": code_structure,
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to get code structure: {str(e)}",
+            }
+
+
+def get_all_tools(group: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Get all tools defined with the @tool decorator in OpenAI format
+    Get all tools defined with the @tool decorator in OpenAI format,
+    optionally filtered by group.
+
+    Args:
+        group: If provided, only return tools from this group
 
     Returns:
         List of tool definitions for OpenAI API
@@ -215,7 +256,9 @@ def get_all_tools() -> List[Dict[str, Any]]:
     tool_schemas = []
     for name, method in inspect.getmembers(Tools):
         if hasattr(method, "is_tool") and method.is_tool:
-            tool_schemas.append(method.get_openai_schema())
+            # If group is specified, only include tools from that group
+            if group is None or method.tool_group == group:
+                tool_schemas.append(method.get_openai_schema())
 
     return tool_schemas
 

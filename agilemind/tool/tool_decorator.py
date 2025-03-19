@@ -19,6 +19,7 @@ def tool(
     name_or_func: Optional[Union[str, Callable]] = None,
     description: Optional[str] = None,
     confirmation_required: bool = False,
+    group: str = "general",
 ):
     """
     Decorator to mark a function as a tool and provide OpenAI API tools format metadata.
@@ -27,6 +28,7 @@ def tool(
         name_or_func: Function or custom name for the tool
         description: Optional description (defaults to function docstring)
         confirmation_required: Whether user confirmation is required before execution
+        group: Group/category this tool belongs to (default: "general")
 
     Returns:
         Decorated function with OpenAI tools metadata
@@ -44,6 +46,7 @@ def tool(
             name=name,
             description=description,
             confirmation_required=confirmation_required,
+            group=group,
         )
 
     return decorator
@@ -54,6 +57,7 @@ def _tool_impl(
     name: Optional[str] = None,
     description: Optional[str] = None,
     confirmation_required: bool = False,
+    group: str = "general",
 ):
     """
     Actual implementation of the tool decorator
@@ -63,6 +67,7 @@ def _tool_impl(
         name: Optional custom name for the tool
         description: Optional description
         confirmation_required: Whether user confirmation is required before execution
+        group: Group/category this tool belongs to
     """
     func_name = name or func.__name__
     signature = inspect.signature(func)
@@ -116,6 +121,7 @@ def _tool_impl(
     wrapper.tool_description = func_description
     wrapper.tool_parameters = params
     wrapper.confirmation_required = confirmation_required
+    wrapper.tool_group = group
 
     # Add a method to get OpenAI format
     def get_openai_schema():
