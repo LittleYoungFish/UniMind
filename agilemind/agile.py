@@ -4,10 +4,14 @@ Development of software using Agile methodology.
 
 import os
 import json
+import shutil
+import readchar
 from pathlib import Path
 from execution import Agent
+from rich.panel import Panel
 from tool import get_all_tools
 from prompt import agile_prompt
+from rich import print as rich_print
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 
@@ -54,9 +58,9 @@ def run_workflow(
     result = {}
 
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
+        SpinnerColumn(finished_text="[bold green]\N{HEAVY CHECK MARK}"),
         TimeElapsedColumn(),
+        TextColumn("[bold blue]{task.description}"),
     ) as progress:
         # Demand analysis step
         demand_task = progress.add_task("Analyzing user demand...", total=1)
@@ -64,43 +68,70 @@ def run_workflow(
         progress.update(
             demand_task,
             completed=1,
-            description="[bold green]✓ Demand analysis completed",
+            description="[bold green]Demand analysis completed",
         )
         result["demand_analysis"] = demand_analysis
 
         # Architecture step
-        arch_task = progress.add_task("Querying Architect...", total=1)
+        arch_task = progress.add_task("Building architecture...", total=1)
         architecture = architect.process(json.dumps(demand_analysis))
         # Convert the architecture from JSON format
         architecture = json.loads(architecture["content"])
         progress.update(
-            arch_task, completed=1, description="[bold green]✓ Architecture created"
+            arch_task, completed=1, description="[bold green]Architecture created"
         )
         result["architecture"] = architecture
 
         modules = architecture["modules"]
+
+        # Create parent task for module implementation
+        modules_task = progress.add_task("Implementing module...", total=len(modules))
+        module_subtask = []
+
         for i, module in enumerate(modules):
             module_name = module["name"]
 
-            # Use single task for implementation
-            impl_task = progress.add_task(
-                f"Implementing module: {module_name}...", total=1
+            module_subtask.append(
+                progress.add_task(f"    Implementing module {module_name}...", total=1)
             )
+
             program = programmer.process(json.dumps(module))
-            progress.update(
-                impl_task,
-                completed=1,
-                description=f"[bold green]✓ Module {module_name} implemented",
-            )
 
             with open(f"docs/{module_name}.json", "w") as f:
                 f.write(json.dumps(program, indent=4))
 
             result[module_name] = program
 
-        progress.print(
-            f"[bold green]✓ Development completed! Check your software in {output}"
+            # Mark the subtask as completed
+            progress.update(
+                module_subtask[-1],
+                description=f"    [bold green]Module {module_name} implemented",
+                completed=1,
+            )
+
+            # Update parent task completion count
+            progress.update(modules_task, completed=i + 1)
+
+        # Remove all subtasks
+        for subtask in module_subtask:
+            progress.remove_task(subtask)
+
+        progress.update(
+            modules_task,
+            description="[bold green]All modules implemented",
+            completed=len(modules),
         )
+
+    abs_path = os.path.abspath(".")
+    rich_print(
+        Panel(
+            f"Development completed! Check your software in {abs_path}",
+            style="bold green",
+            border_style="bold green",
+            title="Success",
+            title_align="center",
+        )
+    )
 
     return result
 
@@ -119,6 +150,24 @@ def dev(
     Returns:
         Dictionary containing the software development process
     """
+    # If output dir exists, ask user whether to confirm purging it first
+    if Path(output).exists():
+        rich_print(
+            Panel(
+                "The output directory already exists. Do you want to delete its contents? (Y/n)",
+                border_style="bold red",
+                title="Warning",
+                title_align="center",
+            )
+        )
+
+        confirm = readchar.readchar().lower()
+        if confirm != "y":
+            return {"status": "cancelled"}
+
+        # Purge the output directory
+        shutil.rmtree(output)
+
     Path(output).mkdir(parents=True, exist_ok=True)
 
     # Change current working directory to the output directory
