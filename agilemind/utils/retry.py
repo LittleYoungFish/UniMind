@@ -1,13 +1,15 @@
 """
-Retry decorator utility for handling transient failures.
+Retry decorator utility for handling transient failures with Rich visualization.
 """
 
 import time
-import logging
 from functools import wraps
-from typing import Type, List, Optional
+from rich.table import Table
+from rich.panel import Panel
+from typing import Type, List
+from rich.console import Console
 
-logger = logging.getLogger(__name__)
+console = Console()
 
 
 def retry(
@@ -15,48 +17,67 @@ def retry(
     delay: float = 1.0,
     backoff_factor: float = 2.0,
     exceptions: List[Type[Exception]] = None,
-    logger_name: Optional[str] = None,
 ):
     """
-    Retry decorator for handling transient failures.
+    Retry decorator for handling transient failures with Rich visualization.
+    Uses techniques that don't conflict with other Live displays.
 
     Args:
         max_attempts: Maximum number of retry attempts (default: 3)
         delay: Initial delay between retries in seconds (default: 1.0)
         backoff_factor: Multiplier for delay between retries (default: 2.0)
         exceptions: List of exceptions to catch (default: all exceptions)
-        logger_name: Optional logger name to use (default: module logger)
 
     Returns:
         A decorator function that will retry the decorated function on failure.
     """
     exceptions = exceptions or [Exception]
-    log = logging.getLogger(logger_name) if logger_name else logger
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             attempt = 1
             current_delay = delay
+            table = None
 
             while attempt <= max_attempts:
                 try:
                     return func(*args, **kwargs)
+
                 except tuple(exceptions) as e:
-                    if attempt == max_attempts:
-                        log.error(
-                            f"All {max_attempts} retry attempts failed for {func.__name__}: {str(e)}"
-                        )
-                        raise
-
-                    log.warning(
-                        f"Attempt {attempt}/{max_attempts} for {func.__name__} failed: {str(e)}. "
-                        f"Retrying in {current_delay:.2f} seconds..."
+                    # Create a simple table for retry status
+                    if not table:
+                        table = Table()
+                        table.add_column("Attempt", style="cyan")
+                        table.add_column("Function", style="blue")
+                        table.add_column("Error", style="yellow")
+                        table.add_column("Next retry", style="green")
+                    table.add_row(
+                        f"{attempt}/{max_attempts}",
+                        func.__name__,
+                        str(e),
+                        f"in {current_delay:.2f}s",
                     )
-
-                    time.sleep(current_delay)
-                    current_delay *= backoff_factor
-                    attempt += 1
+                    if attempt < max_attempts:
+                        console.print(
+                            Panel(
+                                table, title="Retry in Progress", border_style="yellow"
+                            ),
+                            new_line_start=True,
+                        )
+                        time.sleep(current_delay)
+                        current_delay *= backoff_factor
+                        attempt += 1
+                    else:
+                        console.print(
+                            Panel(
+                                table,
+                                title="Max Retries Exceeded",
+                                border_style="red bold",
+                            ),
+                            new_line_start=True,
+                        )
+                        exit(1)
 
         return wrapper
 

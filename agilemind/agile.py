@@ -23,7 +23,7 @@ quality_assurance = Agent(
 programmer = Agent(
     "programmer",
     "implement software",
-    agile_prompt.PROGRAMMER,
+    agile_prompt.PROGRAMMER_FRAMEWORK,
     tools=get_all_tools(),
 )
 architect = Agent(
