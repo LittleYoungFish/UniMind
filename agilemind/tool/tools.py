@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import inspect
 import subprocess
@@ -158,6 +159,50 @@ class Tools:
                 return {"success": True, "message": f"File deleted: {path}"}
         except Exception as e:
             return {"success": False, "message": f"Failed to delete: {str(e)}"}
+
+    @staticmethod
+    @tool(
+        "add_to_requirements",
+        description="Add a package to the requirements file",
+    )
+    def add_to_requirements(
+        language: str, package_name: str, version: str = None
+    ) -> Dict[str, Any]:
+        """
+        Add a package to the requirements file based on the language
+
+        Args:
+            language: The language for which to add the package
+            package_name: The name of the package to add
+            version: The version of the package to add (optional)
+
+        Returns:
+            Dict containing success status and message
+        """
+        if language.lower() == "python":
+            with open("requirements.txt", "a") as f:
+                if version:
+                    f.write(f"{package_name}=={version}\n")
+                else:
+                    f.write(f"{package_name}\n")
+            return {
+                "success": True,
+                "message": f"Added {package_name} to requirements.txt",
+            }
+        elif language.lower() == "javascript":
+            with open("package.json", "r") as f:
+                data = json.load(f)
+            if "dependencies" not in data:
+                data["dependencies"] = {}
+            data["dependencies"][package_name] = version or "*"
+            with open("package.json", "w") as f:
+                json.dump(data, f, indent=2)
+            return {"success": True, "message": f"Added {package_name} to package.json"}
+
+        return {
+            "success": False,
+            "message": f"Unsupported language: {language}",
+        }
 
 
 def get_all_tools() -> List[Dict[str, Any]]:
