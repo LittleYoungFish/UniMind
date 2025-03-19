@@ -5,6 +5,7 @@ Agent module for creating agents that can process inputs, use tools, and hand of
 import os
 import json
 import openai
+from utils import retry
 from tool import execute_tool
 from dotenv import load_dotenv
 from typing import List, Optional, Dict
@@ -92,6 +93,29 @@ class Agent:
     def process(self, input_text: str) -> Dict:
         """
         Process the input using OpenAI API and return the agent's response.
+        This method is decorated with retry to handle transient failures.
+
+        Args:
+            input_text: The text input to process
+
+        Returns:
+            Dict containing the agent's response and any actions taken
+        """
+        return self._process_with_retry(input_text)
+
+    @retry(
+        exceptions=[
+            openai.APIError,
+            openai.APIConnectionError,
+            openai.RateLimitError,
+            openai.APITimeoutError,
+            openai.InternalServerError,
+        ],
+    )
+    def _process_with_retry(self, input_text: str) -> Dict:
+        """
+        Internal method to process input with retry capabilities.
+        This method is decorated with retry to handle transient failures.
 
         Args:
             input_text: The text input to process
@@ -115,11 +139,14 @@ class Agent:
             )
 
         # Call OpenAI API
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=self.tools if self.tools else None,
-        )
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                tools=self.tools if self.tools else None,
+            )
+        except Exception as e:
+            raise
 
         response_message = response.choices[0].message
         self.history.append({"role": "user", "content": input_text})
