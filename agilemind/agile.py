@@ -27,13 +27,13 @@ interactions_programmer = Agent(
     "interactions_programmer",
     "implement module interactions",
     agile_prompt.PROGRAMMER_INTERACTIONS,
-    tools=get_all_tools(),
+    tools=get_all_tools("file_system", "development"),
 )
 structure_programmer = Agent(
     "structure_programmer",
     "implement software structure",
     agile_prompt.PROGRAMMER_FRAMEWORK,
-    tools=get_all_tools(),
+    tools=get_all_tools("file_system", "development"),
 )
 architect = Agent(
     "architect",
@@ -79,18 +79,18 @@ def run_workflow(
             completed=1,
             description="[bold green]Demand analysis completed",
         )
-        context.set_document("demand_analysis", demand_analysis["content"])
+        context.set_document("demand_analysis", demand_analysis[-1]["output"])
         context.add_history("demand_analysis", demand_analysis)
 
         # Architecture step
         arch_task = progress.add_task("Building architecture...", total=1)
         architecture = architect.process(context, json.dumps(demand_analysis))
-        architecture = json.loads(architecture["content"])
+        context.add_history("architecture", architecture)
+        architecture = json.loads(architecture[-1]["output"])
         progress.update(
             arch_task, completed=1, description="[bold green]Architecture created"
         )
         context.set_document("architecture", json.dumps(architecture, indent=4))
-        context.add_history("architecture", architecture)
 
         # Implement modules
         modules = architecture["modules"]
@@ -112,28 +112,33 @@ def run_workflow(
                 f"    Implementing module {module_name}...", total=1
             )
             module_subtasks[module_name] = subtask_id
-            program = structure_programmer.process(context, json.dumps(module))
-            for tool_call in program["tool_calls"]:
-                if (
-                    tool_call["tool"] == "create_file"
-                    and tool_call["result"]["success"]
-                ):
-                    file_path = tool_call["args"]["path"]
-                    file_content = tool_call["args"]["content"]
-                    context.add_code(file_path, file_content)
+            program_structure = structure_programmer.process(
+                context, json.dumps(module)
+            )
+            for query_round in program_structure:
+                if not query_round["tool_calls"]:
+                    continue
+                for tool_call in query_round["tool_calls"]:
+                    if (
+                        tool_call["tool"] == "create_file"
+                        and tool_call["result"]["success"]
+                    ):
+                        file_path = tool_call["args"]["path"]
+                        file_content = tool_call["args"]["content"]
+                        context.add_code(file_path, file_content)
 
-            context.add_history(f"code_structure_{module_name}", program)
+            context.add_history(f"code_structure_{module_name}", program_structure)
             progress.update(
                 subtask_id,
                 description=f"    [bold green]Module {module_name} implemented",
                 completed=1,
             )
 
-            return module_name, program
+            return module_name, program_structure
 
         # Execute module implementations in parallel
         completed_count = 0
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor() as executor:
             future_to_module = {
                 executor.submit(process_module, module): module for module in modules
             }
@@ -152,10 +157,10 @@ def run_workflow(
 
         # Implement the interactions between modules
         interaction_task = progress.add_task("Checking module interactions...", total=1)
-        interactions = interactions_programmer.process(
+        module_interactions = interactions_programmer.process(
             context, json.dumps({"demand": demand, "modules": modules})
         )
-        context.add_history("module_interactions", interactions)
+        context.add_history("module_interactions", module_interactions)
         progress.update(
             interaction_task,
             completed=1,

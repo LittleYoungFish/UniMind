@@ -130,7 +130,7 @@ class Tools:
         List all items in a directory recursively.
 
         Args:
-            path: The path to list (defaults to current directory). **MUST use relative path.**
+            path: The path to list contents recursively (defaults to current working directory). **MUST use relative path.**
 
         Returns:
             Dict containing success status, message, and items in the directory
@@ -170,7 +170,7 @@ class Tools:
         Delete a file or directory.
 
         Args:
-            path: The path to delete. **MUST use relative path.**
+            path: The path of file to delete. **MUST use relative path.**
 
         Returns:
             Dict containing success status and message
@@ -225,8 +225,13 @@ class Tools:
                 "message": f"Added {package_name} to requirements.txt",
             }
         elif language.lower() == "javascript":
-            with open("package.json", "r") as f:
-                data = json.load(f)
+            if not os.path.exists("package.json"):
+                with open("package.json", "w") as f:
+                    data = {"dependencies": {}}
+                    json.dump(data, f, indent=2)
+            else:
+                with open("package.json", "r") as f:
+                    data = json.load(f)
             if "dependencies" not in data:
                 data["dependencies"] = {}
             data["dependencies"][package_name] = version or "*"
@@ -274,13 +279,14 @@ class Tools:
             }
 
 
-def get_all_tools(group: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_all_tools(*groups) -> List[Dict[str, Any]]:
     """
     Get all tools defined with the @tool decorator in OpenAI format,
-    optionally filtered by group.
+    optionally filtered by one or more groups.
 
     Args:
-        group: If provided, only return tools from this group
+        *groups: If provided, only return tools from these groups.
+                Multiple group names can be passed as separate arguments.
 
     Returns:
         List of tool definitions for OpenAI API
@@ -288,8 +294,8 @@ def get_all_tools(group: Optional[str] = None) -> List[Dict[str, Any]]:
     tool_schemas = []
     for name, method in inspect.getmembers(Tools):
         if hasattr(method, "is_tool") and method.is_tool:
-            # If group is specified, only include tools from that group
-            if group is None or method.tool_group == group:
+            # If no groups specified or tool belongs to one of the specified groups
+            if not groups or method.tool_group in groups:
                 tool_schemas.append(method.get_openai_schema())
 
     return tool_schemas
