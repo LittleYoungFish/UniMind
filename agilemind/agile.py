@@ -6,12 +6,14 @@ import os
 import json
 import shutil
 import readchar
+from typing import Dict
 from pathlib import Path
 from execution import Agent
 from rich.panel import Panel
 from tool import get_all_tools
 from prompt import agile_prompt
 from rich import print as rich_print
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 
@@ -85,36 +87,57 @@ def run_workflow(
         modules = architecture["modules"]
 
         # Create parent task for module implementation
-        modules_task = progress.add_task("Implementing module...", total=len(modules))
-        module_subtask = []
+        modules_task = progress.add_task("Implementing modules...", total=len(modules))
+        module_subtasks = {}
 
-        for i, module in enumerate(modules):
-            module_name = module["name"]
+        # Helper function to process a single module
+        def process_module(module: Dict) -> tuple[str, Dict]:
+            """
+            Process a single module.
 
-            module_subtask.append(
-                progress.add_task(f"    Implementing module {module_name}...", total=1)
+            Args:
+                module: Module to process
+
+            Returns:
+                Tuple containing the module name and the implemented program
+            """
+            module_name: str = module["name"]
+            subtask_id = progress.add_task(
+                f"    Implementing module {module_name}...", total=1
             )
+            module_subtasks[module_name] = subtask_id
 
             program = programmer.process(json.dumps(module))
 
             with open(f"docs/{module_name}.json", "w") as f:
                 f.write(json.dumps(program, indent=4))
 
-            result[module_name] = program
-
-            # Mark the subtask as completed
             progress.update(
-                module_subtask[-1],
+                subtask_id,
                 description=f"    [bold green]Module {module_name} implemented",
                 completed=1,
             )
 
-            # Update parent task completion count
-            progress.update(modules_task, completed=i + 1)
+            return module_name, program
+
+        # Execute module implementations in parallel
+        completed_count = 0
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all module processing tasks
+            future_to_module = {
+                executor.submit(process_module, module): module for module in modules
+            }
+
+            # Process results as they complete
+            for future in as_completed(future_to_module):
+                module_name, program = future.result()
+                result[module_name] = program
+                completed_count += 1
+                progress.update(modules_task, completed=completed_count)
 
         # Remove all subtasks
-        for subtask in module_subtask:
-            progress.remove_task(subtask)
+        for subtask_id in module_subtasks.values():
+            progress.remove_task(subtask_id)
 
         progress.update(
             modules_task,
