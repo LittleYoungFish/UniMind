@@ -2,8 +2,7 @@
 Context module for managing state and data flow throughout the pipeline execution.
 """
 
-import json
-from execution import Executor
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
@@ -12,121 +11,112 @@ class Context:
     Context class that manages the state and data flow throughout pipeline execution.
     """
 
-    raw_demand: str
-    budget: float
     root_dir: str
-    executor: Executor = None
+    raw_demand: str
+    document: Dict[str, str] = {}
+    code_structure: Dict[str, str] = {}
     history: List[Dict[str, Any]] = []
-    artifacts: List[str] = []
+    time: float = 0.0
 
-    def __init__(self, initial_data: Optional[Dict[str, Any]] = None):
+    def __init__(self, raw_demand: str, root_dir: Optional[str] = None):
         """
-        Initialize a new context.
+        Initialize the context with the root directory and raw demand.
 
         Args:
-            initial_data: Optional initial data to populate the context
+            raw_demand: User demand for the software
+            root_dir: Root directory path to save the software
         """
-        self._data = initial_data.copy() if initial_data else {}
-        self._metadata = {}
-
-    def __getitem__(self, key: str) -> Any:
-        """
-        Get an item from the context by key.
-
-        Args:
-            key: The key to look up
-
-        Returns:
-            The value associated with the key
-
-        Raises:
-            KeyError: If the key is not found
-        """
-        return self._data[key]
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        """
-        Set an item in the context.
-
-        Args:
-            key: The key to set
-            value: The value to associate with the key
-        """
-        self._data[key] = value
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """
-        Get an item from the context by key, with a default value.
-
-        Args:
-            key: The key to look up
-            default: The default value to return if key not found
-
-        Returns:
-            The value associated with the key, or the default
-        """
-        return self._data.get(key, default)
-
-    def update(self, data: Dict[str, Any]) -> None:
-        """
-        Update the context with new data.
-
-        Args:
-            data: Dictionary of new data to add to the context
-        """
-        self._data.update(data)
-
-    def set_metadata(self, key: str, value: Any) -> None:
-        """
-        Set metadata in the context.
-
-        Args:
-            key: The metadata key
-            value: The metadata value
-        """
-        self._metadata[key] = value
-
-    def get_metadata(self, key: str, default: Any = None) -> Any:
-        """
-        Get metadata from the context.
-
-        Args:
-            key: The metadata key to look up
-            default: The default value to return if key not found
-
-        Returns:
-            The metadata value, or the default
-        """
-        return self._metadata.get(key, default)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the context to a dictionary.
-
-        Returns:
-            Dictionary representation of the context
-        """
-        return self._data.copy()
-
-    def keys(self):
-        """Return the keys in the context data."""
-        return self._data.keys()
-
-    def clear(self) -> None:
-        """Clear all data from the context."""
-        self._data.clear()
-        self._metadata.clear()
-
-    def format_context(self) -> str:
-        """
-        Format the context for use in the message generation process.
-
-        Returns:
-            The formatted context
-        """
-        # TODO: Implement this method
-        return json.dumps(self._data)
+        self.root_dir = root_dir
+        self.raw_demand = raw_demand
+        self.time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def is_root_dir_set(self) -> bool:
         """Check if the root directory is set in the context."""
         return self.root_dir is not None
+
+    def set_document(self, key: str, value: str) -> None:
+        """
+        Set a document in the context.
+
+        Args:
+            key: Key to identify the document
+            value: Document content
+
+        Returns:
+            None
+        """
+        self.document[key] = value
+
+    def get_document(self, key: str) -> str:
+        """
+        Get a document from the context.
+
+        Args:
+            key: Key to identify the document
+
+        Returns:
+            Document content
+        """
+        return self.document[key]
+
+    def add_history(self, step: str, data: Dict[str, Any]) -> None:
+        """
+        Add a step to the history in the context.
+
+        Args:
+            step: Step name
+            data: Data associated with the step
+
+        Returns:
+            None
+        """
+        self.history.append(
+            {
+                "step": step,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "data": data,
+            }
+        )
+
+    def add_code(self, key: str, code: str) -> None:
+        """
+        Add code to the code structure in the context.
+
+        Args:
+            key: Key to identify the code
+            code: Code content
+
+        Returns:
+            None
+        """
+        self.code_structure[key] = code
+
+    def get_code(self, key: str) -> str:
+        """
+        Get code from the code structure in the context.
+
+        Args:
+            key: Key to identify the code
+
+        Returns:
+            Code content
+        """
+        if key not in self.code_structure:
+            return f"Code with path '{key}' not found."
+        return self.code_structure[key]
+
+    def dump(self) -> Dict[str, Any]:
+        """
+        Dump the context data into a dictionary.
+
+        Returns:
+            Dictionary containing the context data
+        """
+        return {
+            "time": self.time,
+            "root_dir": self.root_dir,
+            "raw_demand": self.raw_demand,
+            "document": self.document,
+            "code_structure": self.code_structure,
+            "history": self.history,
+        }

@@ -8,6 +8,7 @@ import shutil
 import readchar
 from typing import Dict
 from pathlib import Path
+from context import Context
 from execution import Agent
 from rich.panel import Panel
 from tool import get_all_tools
@@ -22,9 +23,15 @@ quality_assurance = Agent(
     "assure software quality",
     agile_prompt.QUALITY_ASSURANCE,
 )
-programmer = Agent(
-    "programmer",
-    "implement software",
+interactions_programmer = Agent(
+    "interactions_programmer",
+    "implement module interactions",
+    agile_prompt.PROGRAMMER_INTERACTIONS,
+    tools=get_all_tools(),
+)
+structure_programmer = Agent(
+    "structure_programmer",
+    "implement software structure",
     agile_prompt.PROGRAMMER_FRAMEWORK,
     tools=get_all_tools(),
 )
@@ -44,7 +51,6 @@ demand_analyst = Agent(
 
 def run_workflow(
     demand: str,
-    output: str,
     max_iterations: int = 5,
 ) -> dict:
     """
@@ -57,7 +63,8 @@ def run_workflow(
     Returns:
         Dictionary containing the software development process
     """
-    result = {}
+    output = os.path.abspath(".")
+    context = Context(demand, output)
 
     with Progress(
         SpinnerColumn(finished_text="[bold green]\N{HEAVY CHECK MARK}"),
@@ -72,25 +79,24 @@ def run_workflow(
             completed=1,
             description="[bold green]Demand analysis completed",
         )
-        result["demand_analysis"] = demand_analysis
+        context.set_document("demand_analysis", demand_analysis["content"])
+        context.add_history("demand_analysis", demand_analysis)
 
         # Architecture step
         arch_task = progress.add_task("Building architecture...", total=1)
         architecture = architect.process(json.dumps(demand_analysis))
-        # Convert the architecture from JSON format
         architecture = json.loads(architecture["content"])
         progress.update(
             arch_task, completed=1, description="[bold green]Architecture created"
         )
-        result["architecture"] = architecture
+        context.set_document("architecture", json.dumps(architecture, indent=4))
+        context.add_history("architecture", architecture)
 
+        # Implement modules
         modules = architecture["modules"]
-
-        # Create parent task for module implementation
         modules_task = progress.add_task("Implementing modules...", total=len(modules))
         module_subtasks = {}
 
-        # Helper function to process a single module
         def process_module(module: Dict) -> tuple[str, Dict]:
             """
             Process a single module.
@@ -106,12 +112,17 @@ def run_workflow(
                 f"    Implementing module {module_name}...", total=1
             )
             module_subtasks[module_name] = subtask_id
+            program = structure_programmer.process(json.dumps(module))
+            for tool_call in program["tool_calls"]:
+                if (
+                    tool_call["tool"] == "create_file"
+                    and tool_call["result"]["success"]
+                ):
+                    file_path = tool_call["args"]["path"]
+                    file_content = tool_call["args"]["content"]
+                    context.add_code(file_path, file_content)
 
-            program = programmer.process(json.dumps(module))
-
-            with open(f"docs/{module_name}.json", "w") as f:
-                f.write(json.dumps(program, indent=4))
-
+            context.add_history(f"code_structure_{module_name}", program)
             progress.update(
                 subtask_id,
                 description=f"    [bold green]Module {module_name} implemented",
@@ -123,32 +134,37 @@ def run_workflow(
         # Execute module implementations in parallel
         completed_count = 0
         with ThreadPoolExecutor(max_workers=5) as executor:
-            # Submit all module processing tasks
             future_to_module = {
                 executor.submit(process_module, module): module for module in modules
             }
-
-            # Process results as they complete
             for future in as_completed(future_to_module):
-                module_name, program = future.result()
-                result[module_name] = program
+                _, _ = future.result()
                 completed_count += 1
                 progress.update(modules_task, completed=completed_count)
 
-        # Remove all subtasks
         for subtask_id in module_subtasks.values():
             progress.remove_task(subtask_id)
-
         progress.update(
             modules_task,
             description="[bold green]All modules implemented",
             completed=len(modules),
         )
 
-    abs_path = os.path.abspath(".")
+        # Implement the interactions between modules
+        interaction_task = progress.add_task("Checking module interactions...", total=1)
+        interactions = interactions_programmer.process(
+            json.dumps({"demand": demand, "modules": modules})
+        )
+        context.add_history("module_interactions", interactions)
+        progress.update(
+            interaction_task,
+            completed=1,
+            description="[bold green]Module interactions implemented",
+        )
+
     rich_print(
         Panel(
-            f"Development completed! Check your software in {abs_path}",
+            f"Development completed! Check your software in {output}",
             style="bold green",
             border_style="bold green",
             title="Success",
@@ -156,7 +172,7 @@ def run_workflow(
         )
     )
 
-    return result
+    return context.dump()
 
 
 def dev(
@@ -177,7 +193,7 @@ def dev(
     if Path(output).exists():
         rich_print(
             Panel(
-                "The output directory already exists. Do you want to delete its contents? (Y/n)",
+                f'The output directory "{output}" already exists. Do you want to delete its contents? (Y/n)',
                 border_style="bold red",
                 title="Warning",
                 title_align="center",
@@ -198,9 +214,9 @@ def dev(
     os.chdir(output)
 
     try:
-        result = run_workflow(demand, output)
+        result = run_workflow(demand)
 
-        with open("docs/trace.txt", "w") as f:
+        with open("docs/development_record.json", "w") as f:
             f.write(json.dumps(result, indent=4))
     finally:
         os.chdir(initial_cwd)  # Restore original working directory
