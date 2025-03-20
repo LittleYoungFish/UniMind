@@ -11,25 +11,28 @@ from typing import Any, Dict, List, Optional
 class Tools:
     @staticmethod
     @tool(
-        "create_file",
-        description="Create a file with the specified content",
+        "write_file",
+        description="Write content to a file. If the file already exists, it will be overwritten. Otherwise, a new file will be created.",
         group="file_system",
     )
-    def create_file(context: Context, path: str, content: str) -> Dict[str, Any]:
+    def write_file(context: Context, path: str, content: str) -> Dict[str, Any]:
         """
-        Create a file with the specified content.
-        If parent directories do not exist, they will be created.
+        Write content to a file. If the file already exists, it will be overwritten. Otherwise, a new file will be created.
 
         Args:
-            path: The path to the file to create. **MUST use relative path.**
+            path: The path to the file to write. **MUST use relative path.**
             content: The content to write to the file. When creating a code file, 'content' will be written derectly to the file so make sure it is a valid code.
 
         Returns:
             Dict containing success status and message
         """
-        # If file already exists, return an error
-        if os.path.isfile(path):
-            return {"success": False, "message": f"File already exists: {path}"}
+        if ".." in path or path.startswith("/"):
+            return {
+                "success": False,
+                "message": "Cannot write files outside the current directory",
+            }
+
+        overwritten = True if os.path.isfile(path) else False
 
         try:
             # Ensure directory exists
@@ -37,7 +40,14 @@ class Tools:
 
             with open(path, "w") as f:
                 f.write(content)
-            return {"success": True, "message": f"File created at {path}"}
+            return {
+                "success": True,
+                "message": (
+                    f"File created at {path}"
+                    if not overwritten
+                    else f"File overwritten at {path}"
+                ),
+            }
         except Exception as e:
             return {"success": False, "message": f"Failed to create file: {str(e)}"}
 
@@ -53,6 +63,12 @@ class Tools:
         Returns:
             Dict containing success status, message, and file content
         """
+        if ".." in path or path.startswith("/"):
+            return {
+                "success": False,
+                "message": "Cannot read files outside the current directory",
+            }
+
         try:
             if not os.path.exists(path):
                 return {"success": False, "message": f"File not found: {path}"}
@@ -119,6 +135,12 @@ class Tools:
         Returns:
             Dict containing success status, message, and items in the directory
         """
+        if ".." in path or path.startswith("/"):
+            return {
+                "success": False,
+                "message": "Cannot list files outside the current directory",
+            }
+
         try:
             if not os.path.exists(path):
                 return {"success": False, "message": f"Path not found: {path}"}
@@ -141,7 +163,6 @@ class Tools:
     @tool(
         "delete_file",
         description="Delete a file or directory",
-        confirmation_required=True,
         group="file_system",
     )
     def delete_file(context: Context, path: str) -> Dict[str, Any]:
@@ -154,6 +175,12 @@ class Tools:
         Returns:
             Dict containing success status and message
         """
+        if ".." in path or path.startswith("/"):
+            return {
+                "success": False,
+                "message": "Cannot delete files outside the current directory",
+            }
+
         try:
             if not os.path.exists(path):
                 return {"success": False, "message": f"Path not found: {path}"}
