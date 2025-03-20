@@ -6,6 +6,7 @@ import os
 import json
 import openai
 from utils import retry
+from context import Context
 from tool import execute_tool
 from dotenv import load_dotenv
 from typing import List, Optional, Dict
@@ -90,18 +91,19 @@ class Agent:
         with open(self.save_path, "a") as f:
             f.write(response_content + "\n\n")
 
-    def process(self, input_text: str) -> Dict:
+    def process(self, context: Context, input_text: str) -> Dict:
         """
         Process the input using OpenAI API and return the agent's response.
         This method is decorated with retry to handle transient failures.
 
         Args:
+            context: The context object
             input_text: The text input to process
 
         Returns:
             Dict containing the agent's response and any actions taken
         """
-        return self._process_with_retry(input_text)
+        return self._process_with_retry(context, input_text)
 
     @retry(
         exceptions=[
@@ -110,14 +112,16 @@ class Agent:
             openai.RateLimitError,
             openai.APITimeoutError,
             openai.InternalServerError,
+            json.JSONDecodeError,
         ],
     )
-    def _process_with_retry(self, input_text: str) -> Dict:
+    def _process_with_retry(self, context: Context, input_text: str) -> Dict:
         """
         Internal method to process input with retry capabilities.
         This method is decorated with retry to handle transient failures.
 
         Args:
+            context: The context object
             input_text: The text input to process
 
         Returns:
@@ -145,7 +149,7 @@ class Agent:
                 messages=messages,
                 tools=self.tools if self.tools else None,
             )
-        except Exception as e:
+        except Exception:
             raise
 
         response_message = response.choices[0].message
@@ -180,7 +184,7 @@ class Agent:
                 else:
                     # Execute the tool
                     args = json.loads(tool_call.function.arguments)
-                    tool_result = execute_tool(tool_name, args)
+                    tool_result = execute_tool(context, tool_name, args)
                     result["tool_calls"].append(
                         {"tool": tool_name, "args": args, "result": tool_result}
                     )

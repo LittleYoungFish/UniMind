@@ -4,6 +4,7 @@ import shutil
 import inspect
 import subprocess
 from tool import tool
+from context import Context
 from typing import Any, Dict, List, Optional
 
 
@@ -14,7 +15,7 @@ class Tools:
         description="Create a file with the specified content",
         group="file_system",
     )
-    def create_file(path: str, content: str) -> Dict[str, Any]:
+    def create_file(context: Context, path: str, content: str) -> Dict[str, Any]:
         """
         Create a file with the specified content.
         If parent directories do not exist, they will be created.
@@ -42,7 +43,7 @@ class Tools:
 
     @staticmethod
     @tool("read_file", description="Read the content of a file", group="file_system")
-    def read_file(path: str) -> Dict[str, Any]:
+    def read_file(context: Context, path: str) -> Dict[str, Any]:
         """
         Read and return the content of a file.
 
@@ -74,7 +75,9 @@ class Tools:
         confirmation_required=True,
         group="system",
     )
-    def execute_command(command: str, cwd: Optional[str] = None) -> Dict[str, Any]:
+    def execute_command(
+        context: Context, command: str, cwd: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Execute a shell command. Related path **MUST be relative path.**
 
@@ -106,7 +109,7 @@ class Tools:
         description="List contents of a directory recursively, equivalent to 'ls -R <path>'",
         group="file_system",
     )
-    def list_directory(path: str = ".") -> Dict[str, Any]:
+    def list_directory(context: Context, path: str = ".") -> Dict[str, Any]:
         """
         List all items in a directory recursively.
 
@@ -141,7 +144,7 @@ class Tools:
         confirmation_required=True,
         group="file_system",
     )
-    def delete_file(path: str) -> Dict[str, Any]:
+    def delete_file(context: Context, path: str) -> Dict[str, Any]:
         """
         Delete a file or directory.
 
@@ -171,7 +174,7 @@ class Tools:
         group="development",
     )
     def add_to_requirements(
-        language: str, package_name: str, version: str = None
+        context: Context, language: str, package_name: str, version: str = None
     ) -> Dict[str, Any]:
         """
         Add a package to the requirements file based on the language
@@ -215,7 +218,7 @@ class Tools:
         description="Get the code structure of a module or all modules",
         group="development",
     )
-    def get_code_structure(module: str = None) -> Dict[str, Any]:
+    def get_code_structure(context: Context, module: str = None) -> Dict[str, Any]:
         """
         Get the code structure of a module or all modules
 
@@ -226,9 +229,11 @@ class Tools:
             Dict containing success status and message
         """
         try:
-            pass
-            code_structure = {}
-            # TODO: Implement code structure retrieval from Context
+            code_structure = {
+                k: v
+                for k, v in context.code_structure.items()
+                if module is None or module in k
+            }
 
             return {
                 "success": True,
@@ -263,11 +268,14 @@ def get_all_tools(group: Optional[str] = None) -> List[Dict[str, Any]]:
     return tool_schemas
 
 
-def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+def execute_tool(
+    context: Context, tool_name: str, arguments: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Execute a tool by name with the provided arguments
 
     Args:
+        context: The context object
         tool_name: Name of the tool to execute
         arguments: Arguments to pass to the tool
 
@@ -289,7 +297,7 @@ def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
                     param.VAR_POSITIONAL,
                     param.VAR_KEYWORD,
                 ):
-                    if param_name not in arguments:
+                    if param_name not in arguments and param_name != "context":
                         missing_args.append(param_name)
             if missing_args:
                 return {
@@ -318,6 +326,6 @@ def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
                     }
 
             # Execute the tool if confirmed or if no confirmation required
-            return method(**arguments)
+            return method(context, **arguments)
 
     return {"success": False, "message": f"Unknown tool: {tool_name}"}

@@ -73,7 +73,7 @@ def run_workflow(
     ) as progress:
         # Demand analysis step
         demand_task = progress.add_task("Analyzing user demand...", total=1)
-        demand_analysis = demand_analyst.process(demand)
+        demand_analysis = demand_analyst.process(context, demand)
         progress.update(
             demand_task,
             completed=1,
@@ -84,7 +84,7 @@ def run_workflow(
 
         # Architecture step
         arch_task = progress.add_task("Building architecture...", total=1)
-        architecture = architect.process(json.dumps(demand_analysis))
+        architecture = architect.process(context, json.dumps(demand_analysis))
         architecture = json.loads(architecture["content"])
         progress.update(
             arch_task, completed=1, description="[bold green]Architecture created"
@@ -112,7 +112,7 @@ def run_workflow(
                 f"    Implementing module {module_name}...", total=1
             )
             module_subtasks[module_name] = subtask_id
-            program = structure_programmer.process(json.dumps(module))
+            program = structure_programmer.process(context, json.dumps(module))
             for tool_call in program["tool_calls"]:
                 if (
                     tool_call["tool"] == "create_file"
@@ -153,7 +153,7 @@ def run_workflow(
         # Implement the interactions between modules
         interaction_task = progress.add_task("Checking module interactions...", total=1)
         interactions = interactions_programmer.process(
-            json.dumps({"demand": demand, "modules": modules})
+            context, json.dumps({"demand": demand, "modules": modules})
         )
         context.add_history("module_interactions", interactions)
         progress.update(

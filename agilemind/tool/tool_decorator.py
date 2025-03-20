@@ -129,6 +129,10 @@ def _tool_impl(
         required_params = []
 
         for param in params:
+            # Skip the context parameter when generating schema for OpenAI API
+            if param.name == "context":
+                continue
+
             param_schema = {
                 "type": _get_openai_type(param.type),
                 "description": param.description,
