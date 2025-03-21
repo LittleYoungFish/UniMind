@@ -73,7 +73,7 @@ def run_workflow(
 
     Args:
         demand: User demand for the software
-        output: Directory path to save the software
+        max_iterations: Maximum number of iterations for each agent
 
     Returns:
         Dictionary containing the software development process
@@ -89,7 +89,7 @@ def run_workflow(
     ) as progress:
         # Demand analysis step
         demand_task = progress.add_task("Analyzing user demand...", total=1)
-        demand_analysis = demand_analyst.process(context, demand)
+        demand_analysis = demand_analyst.process(context, demand, max_iterations)
         progress.update(
             demand_task,
             completed=1,
@@ -100,7 +100,9 @@ def run_workflow(
 
         # Architecture step
         arch_task = progress.add_task("Building architecture...", total=1)
-        architecture = architect.process(context, json.dumps(demand_analysis))
+        architecture = architect.process(
+            context, json.dumps(demand_analysis), max_iterations
+        )
         context.add_history("architecture", architecture)
         architecture = json.loads(architecture[-1]["output"])
         progress.update(
@@ -129,7 +131,7 @@ def run_workflow(
             )
             module_subtasks[module_name] = subtask_id
             program_structure = structure_programmer.process(
-                context, json.dumps(module)
+                context, json.dumps(module), max_iterations
             )
 
             context.add_history(f"code_structure_{module_name}", program_structure)
@@ -165,7 +167,9 @@ def run_workflow(
         # Implement the interactions between modules
         interaction_task = progress.add_task("Checking module interactions...", total=1)
         module_interactions = interactions_programmer.process(
-            context, json.dumps({"demand": demand, "modules": modules})
+            context,
+            json.dumps({"demand": demand, "modules": modules}),
+            max_iterations,
         )
         context.add_history("module_interactions", module_interactions)
         progress.update(
@@ -193,7 +197,7 @@ def run_workflow(
             file_data = context.code.uptodated[file]
             xml_data = f"<path>{file}</path>\n<code>{file_data}</code>"
 
-            logic = logic_programmer.process(context, xml_data)
+            logic = logic_programmer.process(context, xml_data, max_iterations)
             context.add_history(f"code_logic_{file}", logic)
 
             return file, logic

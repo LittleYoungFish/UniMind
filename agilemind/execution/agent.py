@@ -94,7 +94,9 @@ class Agent:
         with open(self.save_path, "a") as f:
             f.write(response_content + "\n\n")
 
-    def process(self, context: Context, input_text: str) -> Dict:
+    def process(
+        self, context: Context, input_text: str, max_iterations: int = None
+    ) -> Dict:
         """
         Process the input using OpenAI API and return the agent's response.
         This method is decorated with retry to handle transient failures.
@@ -102,11 +104,12 @@ class Agent:
         Args:
             context: The context object
             input_text: The text input to process
+            max_iterations: Maximum number of interaction rounds (None means no limit)
 
         Returns:
             Dict containing the agent's response and any actions taken
         """
-        return self._process_with_retry(context, input_text)
+        return self._process_with_retry(context, input_text, max_iterations)
 
     @retry(
         exceptions=[
@@ -118,7 +121,9 @@ class Agent:
             json.JSONDecodeError,
         ],
     )
-    def _process_with_retry(self, context: Context, input_text: str) -> List[Dict]:
+    def _process_with_retry(
+        self, context: Context, input_text: str, max_iterations: int = None
+    ) -> List[Dict]:
         """
         Internal method to process input with retry capabilities.
         This method is decorated with retry to handle transient failures.
@@ -126,6 +131,7 @@ class Agent:
         Args:
             context: The context object
             input_text: The text input to process
+            max_iterations: Maximum number of interaction rounds (None means no limit)
 
         Returns:
             List of dictionaries containing information for each round of interaction
@@ -162,7 +168,8 @@ class Agent:
         round_number = 0
 
         # Continue conversation until no more tool calls or a handoff is requested
-        while True:
+        # or until max_iterations is reached (if specified)
+        while max_iterations is None or round_number < max_iterations:
             round_number += 1
 
             try:
@@ -290,7 +297,12 @@ class Agent:
             self.rounds.append(current_round.copy())
 
             # Break the loop if no tool calls or handoff is requested
-            if not current_round_tool_calls or handoff_requested:
+            # or if we've reached the maximum number of iterations
+            if (
+                not current_round_tool_calls
+                or handoff_requested
+                or (max_iterations is not None and round_number >= max_iterations)
+            ):
                 break
 
             # Prepare for next round - tool results become the new input
