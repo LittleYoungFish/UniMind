@@ -4,6 +4,7 @@ Development of software using Agile methodology.
 
 import os
 import json
+import time
 import shutil
 import readchar
 from typing import Dict
@@ -11,9 +12,11 @@ from pathlib import Path
 from context import Context
 from execution import Agent
 from rich.panel import Panel
+from datetime import timedelta
 from tool import get_all_tools
 from prompt import agile_prompt
 from rich import print as rich_print
+from execution import deterministic_generation
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
@@ -22,30 +25,42 @@ quality_assurance = Agent(
     "quality_assurance",
     "assure software quality",
     agile_prompt.QUALITY_ASSURANCE,
+    generation_params=deterministic_generation,
+)
+logic_programmer = Agent(
+    "logic_programmer",
+    "implement software logic",
+    agile_prompt.PROGRAMMER_LOGIC,
+    tools=get_all_tools("file_system", "development"),
+    generation_params=deterministic_generation,
 )
 interactions_programmer = Agent(
     "interactions_programmer",
     "implement module interactions",
     agile_prompt.PROGRAMMER_INTERACTIONS,
     tools=get_all_tools("file_system", "development"),
+    generation_params=deterministic_generation,
 )
 structure_programmer = Agent(
     "structure_programmer",
     "implement software structure",
     agile_prompt.PROGRAMMER_FRAMEWORK,
     tools=get_all_tools("file_system", "development"),
+    generation_params=deterministic_generation,
 )
 architect = Agent(
     "architect",
     "create software architecture",
     agile_prompt.ARCHITECT,
     save_path="docs/software_architecture.json",
+    generation_params=deterministic_generation,
 )
 demand_analyst = Agent(
     "demand_analyst",
     "analyze user demand",
     agile_prompt.DEMAND_ANALYST,
     save_path="docs/demand_analysis.md",
+    generation_params=deterministic_generation,
 )
 
 
@@ -65,6 +80,7 @@ def run_workflow(
     """
     output = os.path.abspath(".")
     context = Context(demand, output)
+    start_time = time.time()
 
     with Progress(
         SpinnerColumn(finished_text="[bold green]\N{HEAVY CHECK MARK}"),
@@ -115,17 +131,6 @@ def run_workflow(
             program_structure = structure_programmer.process(
                 context, json.dumps(module)
             )
-            for query_round in program_structure:
-                if not query_round["tool_calls"]:
-                    continue
-                for tool_call in query_round["tool_calls"]:
-                    if (
-                        tool_call["tool"] == "create_file"
-                        and tool_call["result"]["success"]
-                    ):
-                        file_path = tool_call["args"]["path"]
-                        file_content = tool_call["args"]["content"]
-                        context.add_code(file_path, file_content)
 
             context.add_history(f"code_structure_{module_name}", program_structure)
             progress.update(
@@ -145,15 +150,17 @@ def run_workflow(
             for future in as_completed(future_to_module):
                 _, _ = future.result()
                 completed_count += 1
-                progress.update(modules_task, completed=completed_count)
+                progress.update(
+                    modules_task,
+                    description=(
+                        ("[bold green]" if completed_count == len(modules) else "")
+                        + f"{completed_count}/{len(modules)} modules implemented"
+                    ),
+                    completed=completed_count,
+                )
 
         for subtask_id in module_subtasks.values():
             progress.remove_task(subtask_id)
-        progress.update(
-            modules_task,
-            description="[bold green]All modules implemented",
-            completed=len(modules),
-        )
 
         # Implement the interactions between modules
         interaction_task = progress.add_task("Checking module interactions...", total=1)
@@ -167,12 +174,62 @@ def run_workflow(
             description="[bold green]Module interactions implemented",
         )
 
+        # Implement the logic of every file in parallel
+        files = list(context.code.uptodated.keys())
+        logic_task = progress.add_task("Implementing code logic...", total=len(files))
+        completed_count = 0
+
+        def process_code_logic(file: str) -> tuple[str, Dict]:
+            """
+            Process the logic of a single file.
+
+            Args:
+                file: File to process
+
+            Returns:
+                Tuple containing the file name and the implemented logic
+            """
+            # Prepare the input file data in XML format
+            file_data = context.code.uptodated[file]
+            xml_data = f"<path>{file}</path>\n<code>{file_data}</code>"
+
+            logic = logic_programmer.process(context, xml_data)
+            context.add_history(f"code_logic_{file}", logic)
+
+            return file, logic
+
+        # Execute code logic implementations in parallel
+        with ThreadPoolExecutor() as executor:
+            future_to_file = {
+                executor.submit(process_code_logic, file): file for file in files
+            }
+            for future in as_completed(future_to_file):
+                _, _ = future.result()
+                completed_count += 1
+                progress.update(
+                    logic_task,
+                    description=(
+                        ("[bold green]" if completed_count == len(files) else "")
+                        + f"Logic of {completed_count}/{len(files)} files implemented"
+                    ),
+                    completed=completed_count,
+                )
+
+    # Software information
+    total_time = time.time() - start_time
+    time_str = str(timedelta(seconds=int(total_time)))
+    software_name = architecture["name"]
+    file_count = len(context.code.uptodated.keys())
+
     rich_print(
         Panel(
-            f"Development completed! Check your software in {output}",
-            style="bold green",
+            f"[bold]Development Summary:[/bold]\n\n"
+            f"\N{HEAVY CHECK MARK} Project: [bold cyan]{software_name}[/bold cyan]\n"
+            f"\N{HEAVY CHECK MARK} Total Development Time: [bold yellow]{time_str}[/bold yellow]\n"
+            f"\N{HEAVY CHECK MARK} Files Created: [bold blue]{file_count}[/bold blue]\n"
+            f"\N{HEAVY CHECK MARK} Project Directory: [bold green]{output}[/bold green]",
             border_style="bold green",
-            title="Success",
+            title="Development Completed Successfully",
             title_align="center",
         )
     )
