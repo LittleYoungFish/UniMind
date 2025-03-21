@@ -6,6 +6,24 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
+class ContextCode:
+    """
+    Context class that manages the code structure in the context.
+    """
+
+    structure: Dict[str, str] = {}
+    uptodated: Dict[str, str] = {}
+
+    def dump(self) -> Dict[str, str]:
+        """
+        Dump the code structure into a dictionary.
+
+        Returns:
+            Dictionary containing the code structure
+        """
+        return {"structure": self.structure, "uptodated": self.uptodated}
+
+
 class Context:
     """
     Context class that manages the state and data flow throughout pipeline execution.
@@ -14,7 +32,7 @@ class Context:
     root_dir: str
     raw_demand: str
     document: Dict[str, str] = {}
-    code_structure: Dict[str, str] = {}
+    code: ContextCode = ContextCode()
     history: List[Dict[str, Any]] = []
     time: float = 0.0
 
@@ -78,33 +96,6 @@ class Context:
             }
         )
 
-    def add_code(self, key: str, code: str) -> None:
-        """
-        Add code to the code structure in the context.
-
-        Args:
-            key: Key to identify the code
-            code: Code content
-
-        Returns:
-            None
-        """
-        self.code_structure[key] = code
-
-    def get_code(self, key: str) -> str:
-        """
-        Get code from the code structure in the context.
-
-        Args:
-            key: Key to identify the code
-
-        Returns:
-            Code content
-        """
-        if key not in self.code_structure:
-            return f"Code with path '{key}' not found."
-        return self.code_structure[key]
-
     def dump(self) -> Dict[str, Any]:
         """
         Dump the context data into a dictionary.
@@ -117,6 +108,6 @@ class Context:
             "root_dir": self.root_dir,
             "raw_demand": self.raw_demand,
             "document": self.document,
-            "code_structure": self.code_structure,
+            "code": self.code.dump(),
             "history": self.history,
         }

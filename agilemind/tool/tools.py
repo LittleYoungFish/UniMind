@@ -33,6 +33,9 @@ class Tools:
             }
 
         overwritten = True if os.path.isfile(path) else False
+        if path not in context.code.structure:
+            context.code.structure[path] = content
+        context.code.uptodated[path] = content
 
         try:
             # Ensure directory exists
@@ -121,43 +124,29 @@ class Tools:
 
     @staticmethod
     @tool(
-        "list_directory",
-        description="List contents of a directory recursively, equivalent to 'ls -R <path>'",
+        "list_project_structure",
+        description="List the structure of the project",
         group="file_system",
     )
-    def list_directory(context: Context, path: str = ".") -> Dict[str, Any]:
+    def list_directory(context: Context) -> Dict[str, Any]:
         """
-        List all items in a directory recursively.
-
-        Args:
-            path: The path to list contents recursively (defaults to current working directory). **MUST use relative path.**
+        List the structure of the project.
 
         Returns:
-            Dict containing success status, message, and items in the directory
+            Dict containing success status, message, and project structure
         """
-        if ".." in path or path.startswith("/"):
-            return {
-                "success": False,
-                "message": "Cannot list files outside the current directory",
-            }
-
         try:
-            if not os.path.exists(path):
-                return {"success": False, "message": f"Path not found: {path}"}
-
-            items = []
-            for root, dirs, files in os.walk(path):
-                items.append(
-                    {"directory": root, "files": files, "subdirectories": dirs}
-                )
-
+            items = list(context.code.uptodated.keys())
             return {
                 "success": True,
-                "message": f"Directory listed: {path}",
+                "message": "Project structure listed",
                 "items": items,
             }
         except Exception as e:
-            return {"success": False, "message": f"Failed to list directory: {str(e)}"}
+            return {
+                "success": False,
+                "message": f"Failed to list project structure: {str(e)}",
+            }
 
     @staticmethod
     @tool(
@@ -263,7 +252,7 @@ class Tools:
         try:
             code_structure = {
                 k: v
-                for k, v in context.code_structure.items()
+                for k, v in context.code.structure.items()
                 if module is None or module in k
             }
 
