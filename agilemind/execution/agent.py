@@ -9,6 +9,7 @@ from utils import retry
 from context import Context
 from tool import execute_tool
 from dotenv import load_dotenv
+from .config import GenerationParams
 from typing import List, Optional, Dict
 
 
@@ -36,8 +37,9 @@ class Agent:
         tools: Optional[List[Dict[str, str]]] = None,
         handoffs: Optional[List["Agent"]] = None,
         next_agent: Optional["Agent"] = None,  # Added next_agent for forced handoff
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4o",
         save_path: Optional[str] = None,  # Path to save agent responses
+        generation_params: Optional[GenerationParams] = None,
     ):
         """
         Initialize an Agent instance.
@@ -61,6 +63,7 @@ class Agent:
         self.model = model
         self.save_path = save_path
         self.rounds = []  # Track information by round
+        self.generation_params = generation_params
 
     def __repr__(self) -> str:
         """Return string representation of the Agent."""
@@ -165,6 +168,11 @@ class Agent:
                     model=self.model,
                     messages=messages,
                     tools=tools_with_handoffs if tools_with_handoffs else None,
+                    **(
+                        self.generation_params.to_dict()
+                        if self.generation_params
+                        else {}
+                    ),
                 )
             except Exception:
                 raise
