@@ -227,6 +227,12 @@ def run_workflow(
     total_completion_tokens = token_usage["total"]["completion_tokens"]
     total_tokens = token_usage["total"]["total_tokens"]
 
+    # Get cost info
+    cost_info = context.cost.to_dict()
+    total_prompt_cost = cost_info["total"]["prompt_cost"]
+    total_completion_cost = cost_info["total"]["completion_cost"]
+    total_cost = cost_info["total"]["total_cost"]
+
     rich_print(
         Panel(
             f"[bold]Development Summary:[/bold]\n\n"
@@ -235,7 +241,9 @@ def run_workflow(
             f"\N{HEAVY CHECK MARK} Files Created: [bold blue]{file_count}[/bold blue]\n"
             f"\N{HEAVY CHECK MARK} Project Directory: [bold green]{output}[/bold green]\n"
             f"\N{HEAVY CHECK MARK} Token Usage: [bold magenta]{total_tokens:,}[/bold magenta] tokens "
-            f"([bold]{total_prompt_tokens:,}[/bold] prompt, [bold]{total_completion_tokens:,}[/bold] completion)",
+            f"([bold]{total_prompt_tokens:,}[/bold] prompt, [bold]{total_completion_tokens:,}[/bold] completion)\n"
+            f"\N{HEAVY CHECK MARK} Cost: [bold magenta]${total_cost:.4f}[/bold magenta] "
+            f"([bold]${total_prompt_cost:.4f}[/bold] prompt, [bold]${total_completion_cost:.4f}[/bold] completion)",
             border_style="bold green",
             title="Development Completed Successfully",
             title_align="center",

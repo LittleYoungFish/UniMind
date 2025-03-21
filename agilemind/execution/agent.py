@@ -5,11 +5,11 @@ Agent module for creating agents that can process inputs, use tools, and hand of
 import os
 import json
 import openai
-from utils import retry
 from context import Context
 from tool import execute_tool
 from dotenv import load_dotenv
 from .config import GenerationParams
+from utils import retry, calculate_cost
 from typing import List, Optional, Dict
 
 
@@ -140,6 +140,7 @@ class Agent:
             "tool_calls": None,
             "handoff": None,
             "token_usage": None,
+            "cost": None,  # Add cost field to track costs per round
         }
 
         # Add handoff agents as tools
@@ -185,16 +186,39 @@ class Agent:
 
             # Record token usage with enhanced details
             if hasattr(response, "usage") and response.usage:
+                prompt_tokens = response.usage.prompt_tokens
+                completion_tokens = response.usage.completion_tokens
+
+                # Record token usage
                 current_round["token_usage"] = {
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
                     "total_tokens": response.usage.total_tokens,
                 }
 
+                # Calculate cost using the model_pricing utility
+                cost_info = calculate_cost(
+                    model=self.model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                )
+
+                # Record cost information
+                current_round["cost"] = cost_info
+
                 # Update token usage in context with detailed information
                 context.update_token_usage(
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    agent_name=self.name,
+                    round_number=round_number,
+                    model=self.model,
+                )
+
+                # Update cost information in context
+                context.update_cost(
+                    prompt_cost=cost_info["prompt_cost"],
+                    completion_cost=cost_info["completion_cost"],
                     agent_name=self.name,
                     round_number=round_number,
                     model=self.model,

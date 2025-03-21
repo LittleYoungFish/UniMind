@@ -2,6 +2,7 @@
 Context module for managing state and data flow throughout the pipeline execution.
 """
 
+from .cost import Cost
 from datetime import datetime
 from .token_usage import TokenUsage
 from typing import Any, Dict, List, Optional
@@ -37,6 +38,7 @@ class Context:
     history: List[Dict[str, Any]] = []
     time: float = 0.0
     token_usage: TokenUsage
+    cost: Cost
 
     def __init__(self, raw_demand: str, root_dir: Optional[str] = None):
         """
@@ -50,6 +52,7 @@ class Context:
         self.raw_demand = raw_demand
         self.time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.token_usage = TokenUsage()
+        self.cost = Cost()
 
     def is_root_dir_set(self) -> bool:
         """Check if the root directory is set in the context."""
@@ -125,6 +128,32 @@ class Context:
             model=model,
         )
 
+    def update_cost(
+        self,
+        prompt_cost: float,
+        completion_cost: float,
+        agent_name: str,
+        round_number: int,
+        model: str = None,
+    ) -> None:
+        """
+        Update the cost tracking in the context with fine-grained tracking.
+
+        Args:
+            prompt_cost: Cost for prompts
+            completion_cost: Cost for completions
+            agent_name: Name of the agent making the call
+            round_number: Round number within the agent's processing
+            model: Optional model name used for the API call
+        """
+        self.cost.update(
+            prompt_cost=prompt_cost,
+            completion_cost=completion_cost,
+            agent_name=agent_name,
+            round_number=round_number,
+            model=model,
+        )
+
     def dump(self) -> Dict[str, Any]:
         """
         Dump the context data into a dictionary.
@@ -140,4 +169,5 @@ class Context:
             "code": self.code.dump(),
             "history": self.history,
             "token_usage": self.token_usage.to_dict(),
+            "cost": self.cost.to_dict(),
         }
