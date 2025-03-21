@@ -2,9 +2,34 @@
 Main entry point for the LLM-Agent workflow pipelines.
 """
 
+import sys
+import signal
 import argparse
+from rich.panel import Panel
 from .agile import dev as agile_dev
+from rich import print as rich_print
 from .waterfall import dev as waterfall_dev
+
+interrupt_counter = 0
+
+
+def signal_handler(sig, frame):
+    """Handle SIGINT (Ctrl+C) signals"""
+    global interrupt_counter
+    interrupt_counter += 1
+
+    if interrupt_counter >= 3:
+        rich_print(
+            Panel(
+                "[bold red]Received 3 interrupts. Aborting program.",
+                title="Shutting Down",
+                border_style="red",
+            )
+        )
+        sys.exit(1)
+    else:
+        rich_print(f"[yellow]Press Ctrl+C {3 - interrupt_counter} more times to abort")
+        return
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,6 +72,9 @@ def entry() -> None:
     """
     Main entry point for the CLI.
     """
+    # Set up the signal handler
+    signal.signal(signal.SIGINT, signal_handler)
+
     args = parse_args()
     args = vars(args)
     if args["pipeline"] == "waterfall":
