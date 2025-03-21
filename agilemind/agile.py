@@ -221,13 +221,21 @@ def run_workflow(
     software_name = architecture["name"]
     file_count = len(context.code.uptodated.keys())
 
+    # Get token usage info
+    token_usage = context.token_usage.to_dict()
+    total_prompt_tokens = token_usage["total"]["prompt_tokens"]
+    total_completion_tokens = token_usage["total"]["completion_tokens"]
+    total_tokens = token_usage["total"]["total_tokens"]
+
     rich_print(
         Panel(
             f"[bold]Development Summary:[/bold]\n\n"
             f"\N{HEAVY CHECK MARK} Project: [bold cyan]{software_name}[/bold cyan]\n"
             f"\N{HEAVY CHECK MARK} Total Development Time: [bold yellow]{time_str}[/bold yellow]\n"
             f"\N{HEAVY CHECK MARK} Files Created: [bold blue]{file_count}[/bold blue]\n"
-            f"\N{HEAVY CHECK MARK} Project Directory: [bold green]{output}[/bold green]",
+            f"\N{HEAVY CHECK MARK} Project Directory: [bold green]{output}[/bold green]\n"
+            f"\N{HEAVY CHECK MARK} Token Usage: [bold magenta]{total_tokens:,}[/bold magenta] tokens "
+            f"([bold]{total_prompt_tokens:,}[/bold] prompt, [bold]{total_completion_tokens:,}[/bold] completion)",
             border_style="bold green",
             title="Development Completed Successfully",
             title_align="center",

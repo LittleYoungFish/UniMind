@@ -3,6 +3,7 @@ Context module for managing state and data flow throughout the pipeline executio
 """
 
 from datetime import datetime
+from .token_usage import TokenUsage
 from typing import Any, Dict, List, Optional
 
 
@@ -35,6 +36,7 @@ class Context:
     code: ContextCode = ContextCode()
     history: List[Dict[str, Any]] = []
     time: float = 0.0
+    token_usage: TokenUsage
 
     def __init__(self, raw_demand: str, root_dir: Optional[str] = None):
         """
@@ -47,6 +49,7 @@ class Context:
         self.root_dir = root_dir
         self.raw_demand = raw_demand
         self.time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.token_usage = TokenUsage()
 
     def is_root_dir_set(self) -> bool:
         """Check if the root directory is set in the context."""
@@ -96,6 +99,32 @@ class Context:
             }
         )
 
+    def update_token_usage(
+        self,
+        prompt_tokens: int,
+        completion_tokens: int,
+        agent_name: str,
+        round_number: int,
+        model: str = None,
+    ) -> None:
+        """
+        Update the token usage in the context with fine-grained tracking.
+
+        Args:
+            prompt_tokens: Number of prompt tokens used
+            completion_tokens: Number of completion tokens used
+            agent_name: Name of the agent making the call
+            round_number: Round number within the agent's processing
+            model: Optional model name used for the API call
+        """
+        self.token_usage.update(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            agent_name=agent_name,
+            round_number=round_number,
+            model=model,
+        )
+
     def dump(self) -> Dict[str, Any]:
         """
         Dump the context data into a dictionary.
@@ -110,4 +139,5 @@ class Context:
             "document": self.document,
             "code": self.code.dump(),
             "history": self.history,
+            "token_usage": self.token_usage.to_dict(),
         }

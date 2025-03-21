@@ -37,7 +37,7 @@ class Agent:
         tools: Optional[List[Dict[str, str]]] = None,
         handoffs: Optional[List["Agent"]] = None,
         next_agent: Optional["Agent"] = None,  # Added next_agent for forced handoff
-        model: str = "gpt-4o",
+        model: str = "gpt-4o-mini",
         save_path: Optional[str] = None,  # Path to save agent responses
         generation_params: Optional[GenerationParams] = None,
     ):
@@ -139,6 +139,7 @@ class Agent:
             "output": None,
             "tool_calls": None,
             "handoff": None,
+            "token_usage": None,
         }
 
         # Add handoff agents as tools
@@ -181,6 +182,23 @@ class Agent:
 
             # Update current round with output
             current_round["output"] = response_message.content
+
+            # Record token usage with enhanced details
+            if hasattr(response, "usage") and response.usage:
+                current_round["token_usage"] = {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                }
+
+                # Update token usage in context with detailed information
+                context.update_token_usage(
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    agent_name=self.name,
+                    round_number=round_number,
+                    model=self.model,
+                )
 
             # Save the response if a save path is specified
             if self.save_path and response_message.content:
@@ -258,6 +276,7 @@ class Agent:
                 "output": None,
                 "tool_calls": None,
                 "handoff": None,
+                "token_usage": None,
             }
 
         # Check if there's a forced handoff via next_agent, which takes precedence over
