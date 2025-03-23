@@ -3,9 +3,11 @@ Retry decorator utility for handling transient failures with Rich visualization.
 """
 
 import time
+from rich.box import SIMPLE
 from functools import wraps
 from rich.table import Table
 from rich.panel import Panel
+from rich.align import Align
 from typing import Type, List
 from rich.console import Console
 
@@ -15,7 +17,7 @@ console = Console()
 def retry(
     max_attempts: int = 3,
     delay: float = 1.0,
-    backoff_factor: float = 2.0,
+    backoff_factor: float = 3.0,
     exceptions: List[Type[Exception]] = None,
 ):
     """
@@ -46,12 +48,11 @@ def retry(
 
                 except tuple(exceptions) as e:
                     # Create a simple table for retry status
-                    if not table:
-                        table = Table()
-                        table.add_column("Attempt", style="cyan")
-                        table.add_column("Function", style="blue")
-                        table.add_column("Error", style="yellow")
-                        table.add_column("Next retry", style="green")
+                    table = Table(box=SIMPLE)
+                    table.add_column("Attempt", style="cyan")
+                    table.add_column("Function", style="blue")
+                    table.add_column("Error", style="yellow")
+                    table.add_column("Next retry", style="green")
                     table.add_row(
                         f"{attempt}/{max_attempts}",
                         func.__name__,
@@ -61,7 +62,9 @@ def retry(
                     if attempt < max_attempts:
                         console.print(
                             Panel(
-                                table, title="Retry in Progress", border_style="yellow"
+                                Align.center(table),
+                                title="Retry in Progress",
+                                border_style="yellow",
                             ),
                             new_line_start=True,
                         )
@@ -71,7 +74,7 @@ def retry(
                     else:
                         console.print(
                             Panel(
-                                table,
+                                Align.center(table),
                                 title="Max Retries Exceeded",
                                 border_style="red bold",
                             ),

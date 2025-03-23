@@ -12,6 +12,10 @@ from pathlib import Path
 from context import Context
 from execution import Agent
 from rich.panel import Panel
+from rich.align import Align
+from rich.table import Table
+from rich.box import ROUNDED
+from utils import format_cost
 from datetime import timedelta
 from tool import get_all_tools
 from prompt import agile_prompt
@@ -223,7 +227,11 @@ def run_workflow(
     total_time = time.time() - start_time
     time_str = str(timedelta(seconds=int(total_time)))
     software_name = architecture["name"]
+    module_count = len(modules)
     file_count = len(context.code.uptodated.keys())
+    lines_of_code = sum(len(f.split("\n")) for f in context.code.uptodated.values())
+    doc_count = len(context.document)
+    doc_lines = sum(len(doc.split("\n")) for doc in context.document.values())
 
     # Get token usage info
     token_usage = context.token_usage.to_dict()
@@ -237,20 +245,78 @@ def run_workflow(
     total_completion_cost = cost_info["total"]["completion_cost"]
     total_cost = cost_info["total"]["total_cost"]
 
+    # Create project info table with expanded width
+    project_table = Table(
+        title="Project Information",
+        expand=True,
+        padding=(0, 2),
+        box=ROUNDED,
+        title_justify="left",
+    )
+    project_table.add_column("Project", style="bold cyan")
+    project_table.add_column("Development Time", style="bold yellow")
+    project_table.add_column("Project Directory", style="bold green")
+    project_table.add_row(software_name, time_str, output)
+
+    # Second row of information
+    details_table = Table(
+        title="Development Details",
+        expand=True,
+        padding=(0, 2),
+        box=ROUNDED,
+        title_justify="left",
+        show_header=False,
+        show_lines=True,
+    )
+    details_table.add_row(
+        f"Modules Created: [bold yellow]{module_count}[/bold yellow]",
+        f"Files Created: [bold blue]{file_count}[/bold blue]",
+        f"Documents Created: [bold green]{doc_count}[/bold green]",
+    )
+    details_table.add_row(
+        f"Average files per module: [bold yellow]{file_count / module_count:.2f}[/bold yellow]",
+        f"Total Lines of Code: [bold magenta]{lines_of_code}[/bold magenta]",
+        f"Total Lines of Document: [bold red]{doc_lines}[/bold red]",
+    )
+
+    # Create usage table with expanded width
+    usage_table = Table(
+        title="Usage Statistics",
+        expand=True,
+        padding=(0, 2),
+        box=ROUNDED,
+        title_justify="left",
+    )
+    usage_table.add_column(style="bold")
+    usage_table.add_column("Prompt")
+    usage_table.add_column("Completion")
+    usage_table.add_column("Total")
+    usage_table.add_row(
+        "Tokens",
+        str(total_prompt_tokens),
+        str(total_completion_tokens),
+        str(total_tokens),
+    )
+    usage_table.add_row(
+        "Cost",
+        "≈ " + format_cost(total_prompt_cost),
+        "≈ " + format_cost(total_completion_cost),
+        "[bold blue]" + "≈ " + format_cost(total_cost),
+    )
+
+    main_table = Table(box=None, expand=True)
+    main_table.add_row(project_table)
+    main_table.add_row()
+    main_table.add_row(details_table)
+    main_table.add_row()
+    main_table.add_row(usage_table)
+    main_table.add_row()
+
     rich_print(
         Panel(
-            f"[bold]Development Summary:[/bold]\n\n"
-            f"\N{HEAVY CHECK MARK} Project: [bold cyan]{software_name}[/bold cyan]\n"
-            f"\N{HEAVY CHECK MARK} Total Development Time: [bold yellow]{time_str}[/bold yellow]\n"
-            f"\N{HEAVY CHECK MARK} Files Created: [bold blue]{file_count}[/bold blue]\n"
-            f"\N{HEAVY CHECK MARK} Project Directory: [bold green]{output}[/bold green]\n"
-            f"\N{HEAVY CHECK MARK} Token Usage: [bold magenta]{total_tokens:,}[/bold magenta] tokens "
-            f"([bold]{total_prompt_tokens:,}[/bold] prompt, [bold]{total_completion_tokens:,}[/bold] completion)\n"
-            f"\N{HEAVY CHECK MARK} Cost: [bold magenta]${total_cost:.4f}[/bold magenta] "
-            f"([bold]${total_prompt_cost:.4f}[/bold] prompt, [bold]${total_completion_cost:.4f}[/bold] completion)",
+            Align.center(main_table),
             border_style="bold green",
-            title="Development Completed Successfully",
-            title_align="center",
+            title="[bold]\N{HEAVY CHECK MARK} Development Completed Successfully[/bold]",
         )
     )
 
@@ -275,10 +341,11 @@ def dev(
     if Path(output).exists():
         rich_print(
             Panel(
-                f'The output directory "{output}" already exists. Do you want to delete its contents? (Y/n)',
+                Align.center(
+                    f'The output directory "{output}" already exists. Do you want to delete its contents? (Y/n)'
+                ),
                 border_style="bold red",
                 title="Warning",
-                title_align="center",
             )
         )
 
