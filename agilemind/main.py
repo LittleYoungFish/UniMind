@@ -65,6 +65,13 @@ def parse_args() -> argparse.Namespace:
         ],
         help="Pipeline type to use for development",
     )
+    parser.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        default="gpt-4o-mini",
+        help="String name of the model to use",
+    )
 
     return parser.parse_args()
 
@@ -78,9 +85,11 @@ def entry() -> None:
 
     args = parse_args()
     args = vars(args)
-    if args["pipeline"] == "waterfall":
-        args.pop("pipeline")
+    method = args["pipeline"]
+    args.pop("pipeline")
+    if method == "waterfall":
         waterfall_dev(**args)
-    else:
-        args.pop("pipeline")
+    elif method == "agile":
         agile_dev(**args)
+    else:
+        raise ValueError(f"Invalid pipeline method: {method}")

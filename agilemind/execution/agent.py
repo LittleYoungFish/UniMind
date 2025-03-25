@@ -77,6 +77,15 @@ class Agent:
         """Return the list of agents this agent can hand off to."""
         return self.handoffs
 
+    def set_model(self, model: str) -> None:
+        """
+        Set the model to use for this agent.
+
+        Args:
+            model (str): The model to use
+        """
+        self.model = model
+
     def save_response(self, response_content: str) -> None:
         """
         Save the agent's response to the specified path.

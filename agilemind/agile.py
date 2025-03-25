@@ -74,10 +74,21 @@ demand_analyst = Agent(
     generation_params=deterministic_generation,
 )
 
+all_agents = [
+    syntax_debugger,
+    debugger,
+    quality_assurance,
+    logic_programmer,
+    structure_programmer,
+    architect,
+    demand_analyst,
+]
+
 
 def run_workflow(
     demand: str,
     max_iterations: int = 5,
+    model: str = "gpt-4o-mini",
 ) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
@@ -85,10 +96,15 @@ def run_workflow(
     Args:
         demand: User demand for the software
         max_iterations: Maximum number of iterations for each agent
+        model: Model to use for all agents
 
     Returns:
         Dictionary containing the software development process
     """
+    # Set the model for all agents
+    for agent in all_agents:
+        agent.set_model(model)
+
     output = os.path.abspath(".")
     context = Context(demand, output)
     start_time = time.time()
@@ -341,16 +357,14 @@ def run_workflow(
     return context.dump()
 
 
-def dev(
-    demand: str,
-    output: str,
-) -> dict:
+def dev(demand: str, output: str, model: str) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
 
     Args:
         demand: User demand for the software
         output: Directory path to save the software
+        model: String name of the model to use
 
     Returns:
         Dictionary containing the software development process
@@ -381,7 +395,7 @@ def dev(
     os.chdir(output)
 
     try:
-        result = run_workflow(demand)
+        result = run_workflow(demand, model=model)
 
         with open("docs/development_record.json", "w") as f:
             f.write(json.dumps(result, indent=4))
