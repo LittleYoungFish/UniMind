@@ -12,7 +12,7 @@ class Tools:
     @staticmethod
     @tool(
         "write_file",
-        description="Write content to a file. If the file already exists, it will be overwritten. Otherwise, a new file will be created.",
+        description="Write content to the file at the specified path. If the file already exists, it will be overwritten. Otherwise, a new file (and any necessary directories) will be created.",
         group="file_system",
     )
     def write_file(context: Context, path: str, content: str) -> Dict[str, Any]:
@@ -20,7 +20,7 @@ class Tools:
         Write content to a file. If the file already exists, it will be overwritten. Otherwise, a new file will be created.
 
         Args:
-            path: The path to the file to write. **MUST use relative path.**
+            path: The path to the file to write. Use relative path.
             content: The content to write to the file. When creating a code file, 'content' will be written derectly to the file so make sure it is a valid code.
 
         Returns:
