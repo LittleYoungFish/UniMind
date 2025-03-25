@@ -22,9 +22,23 @@ from prompt import agile_prompt
 from rich import print as rich_print
 from execution import deterministic_generation
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from checker import check_syntax, check_imports, format_error_message
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-
+syntax_debugger = Agent(
+    "syntax_debugger",
+    "debug syntax",
+    agile_prompt.SYNTAX_DEBUGGER,
+    tools=get_all_tools("file_system", "development"),
+    generation_params=deterministic_generation,
+)
+debugger = Agent(
+    "debugger",
+    "debug software",
+    agile_prompt.PROGRAMMER_DEBUGGING,
+    tools=get_all_tools("file_system", "development"),
+    generation_params=deterministic_generation,
+)
 quality_assurance = Agent(
     "quality_assurance",
     "assure software quality",
@@ -35,13 +49,6 @@ logic_programmer = Agent(
     "logic_programmer",
     "implement software logic",
     agile_prompt.PROGRAMMER_LOGIC,
-    tools=get_all_tools("file_system", "development"),
-    generation_params=deterministic_generation,
-)
-interactions_programmer = Agent(
-    "interactions_programmer",
-    "implement module interactions",
-    agile_prompt.PROGRAMMER_INTERACTIONS,
     tools=get_all_tools("file_system", "development"),
     generation_params=deterministic_generation,
 )
@@ -116,76 +123,22 @@ def run_workflow(
 
         # Implement modules
         modules = architecture["modules"]
-        modules_task = progress.add_task("Implementing modules...", total=len(modules))
-        module_subtasks = {}
-
-        def process_module(module: Dict) -> tuple[str, Dict]:
-            """
-            Process a single module.
-
-            Args:
-                module: Module to process
-
-            Returns:
-                Tuple containing the module name and the implemented program
-            """
-            module_name: str = module["name"]
-            subtask_id = progress.add_task(
-                f"    Implementing module {module_name}...", total=1
-            )
-            module_subtasks[module_name] = subtask_id
-            program_structure = structure_programmer.process(
-                context, json.dumps(module), max_iterations
-            )
-
-            context.add_history(f"code_structure_{module_name}", program_structure)
-            progress.update(
-                subtask_id,
-                description=f"    [bold green]Module {module_name} implemented",
-                completed=1,
-            )
-
-            return module_name, program_structure
-
-        # Execute module implementations in parallel
-        completed_count = 0
-        with ThreadPoolExecutor() as executor:
-            future_to_module = {
-                executor.submit(process_module, module): module for module in modules
-            }
-            for future in as_completed(future_to_module):
-                _, _ = future.result()
-                completed_count += 1
-                progress.update(
-                    modules_task,
-                    description=(
-                        ("[bold green]" if completed_count == len(modules) else "")
-                        + f"{completed_count}/{len(modules)} modules implemented"
-                    ),
-                    completed=completed_count,
-                )
-
-        for subtask_id in module_subtasks.values():
-            progress.remove_task(subtask_id)
-
-        # Implement the interactions between modules
-        interaction_task = progress.add_task("Checking module interactions...", total=1)
-        module_interactions = interactions_programmer.process(
+        modules_task = progress.add_task("Implementing modules...", total=1)
+        inplemented_modules = structure_programmer.process(
             context,
-            json.dumps({"demand": demand, "modules": modules}),
+            json.dumps(demand_analysis) + "\n\n" + json.dumps(modules),
             max_iterations,
         )
-        context.add_history("module_interactions", module_interactions)
+        context.add_history("modules", inplemented_modules)
         progress.update(
-            interaction_task,
-            completed=1,
-            description="[bold green]Module interactions implemented",
+            modules_task, completed=1, description="[bold green]Modules implemented"
         )
 
         # Implement the logic of every file in parallel
         files = list(context.code.uptodated.keys())
         logic_task = progress.add_task("Implementing code logic...", total=len(files))
         completed_count = 0
+        files_subtasks = []
 
         def process_code_logic(file: str) -> tuple[str, Dict]:
             """
@@ -197,12 +150,23 @@ def run_workflow(
             Returns:
                 Tuple containing the file name and the implemented logic
             """
+            file_logic_subtask = progress.add_task(
+                f"    Implementing logic for {file}...", total=1
+            )
+            files_subtasks.append(file_logic_subtask)
+
             # Prepare the input file data in XML format
             file_data = context.code.uptodated[file]
             xml_data = f"<path>{file}</path>\n<code>{file_data}</code>"
 
             logic = logic_programmer.process(context, xml_data, max_iterations)
             context.add_history(f"code_logic_{file}", logic)
+
+            progress.update(
+                file_logic_subtask,
+                completed=1,
+                description=f"    [bold green]Logic for {file} implemented",
+            )
 
             return file, logic
 
@@ -222,6 +186,60 @@ def run_workflow(
                     ),
                     completed=completed_count,
                 )
+
+        for subtask in files_subtasks:
+            progress.remove_task(subtask)
+
+        # Check the syntax of the implemented code
+        syntax_task = progress.add_task("Checking code syntax...", total=len(files))
+        for idx, file in enumerate(context.code.uptodated.keys()):
+            error_info = f"in {file}: \n\n"
+
+            syntax = check_syntax(context.code.uptodated[file])
+            if not syntax["valid"]:
+                error_info += f"{syntax['error']}\n\n\n"
+
+            imports = check_imports(context.code.uptodated[file])
+            if imports:
+                error_info += format_error_message(imports)
+
+            if not syntax["valid"] or imports:
+                syntax_debugging = syntax_debugger.process(
+                    context, error_info, max_iterations
+                )
+                context.add_history(f"syntax_{file}", syntax_debugging)
+            progress.update(
+                syntax_task,
+                description=(
+                    ("[bold green]" if idx == len(files) - 1 else "")
+                    + f"Syntax of {idx + 1}/{len(files)} files checked"
+                ),
+                completed=idx + 1,
+            )
+
+        # Quality assurance step
+        qa_round = 0
+        qa_task = progress.add_task("Assuring software quality...", total=1)
+        qa_report = quality_assurance.process(
+            context, json.dumps(list(context.code.uptodated.keys())), max_iterations
+        )
+        context.add_history("quality_assurance", qa_report)
+        progress.update(
+            qa_task,
+            completed=1,
+            description=f"[bold green]Quality assurance round {qa_round} completed",
+        )
+        qa_report = json.loads(qa_report[-1]["output"])
+
+        # Fix the bugs if any
+        if qa_report["is_buggy"]:
+            bugs = qa_report["bugs"]
+            debugger_task = progress.add_task("Debugging software...", total=len(bugs))
+            debug_result = debugger.process(
+                context, json.dumps(qa_report), max_iterations
+            )
+            progress.remove_task(debugger_task)
+            context.add_history("debugger", debug_result)
 
     # Software information
     total_time = time.time() - start_time
