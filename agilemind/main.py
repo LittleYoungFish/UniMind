@@ -72,6 +72,12 @@ def parse_args() -> argparse.Namespace:
         default="gpt-4o-mini",
         help="String name of the model to use",
     )
+    parser.add_argument(
+        "--max_iterations",
+        type=int,
+        default=10,
+        help="Maximum number of iterations to run",
+    )
 
     return parser.parse_args()
 

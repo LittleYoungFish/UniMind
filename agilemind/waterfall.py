@@ -33,7 +33,7 @@ demand_analyst = Agent(
 )
 
 
-def dev(demand: str, output: str, model: str) -> Dict[str, str]:
+def dev(demand: str, output: str, model: str, max_iterations: int) -> Dict[str, str]:
     """
     Run the LLM-Agent workflow pipelines.
 
@@ -41,6 +41,7 @@ def dev(demand: str, output: str, model: str) -> Dict[str, str]:
         demand: User demand for the software
         output: Directory path to save the software
         model: String name of the model to use
+        max_iterations: Maximum number of iterations to run
 
     Returns:
         Dictionary containing the software development process
