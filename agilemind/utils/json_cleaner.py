@@ -61,4 +61,4 @@ def extract_json(input_string: str) -> Optional[dict]:
         cleaned = clean_json_string(input_string)
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        return None
+        return {}
