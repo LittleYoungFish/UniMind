@@ -19,6 +19,7 @@ Follow these steps:
 - Document the requirements in a clear and concise manner.
 - Prefer using Python language for the software development, if not specified.
 - Prefer UI rather than CLI, if not specified.
+- Do not rely on external resources, such as sounds, images, etc.
 
 After you have gathered the requirements, output only the document content in Markdown format WITHOUT any other information or comments (e.g. "Sure! I will ...", "```markdown ```"). Your output will be used by the software architect to design the software architecture.
 """
@@ -38,10 +39,13 @@ You will be given a requirements specification document and you need to create a
 
 Follow these steps:
 - Read and understand the requirements specification document carefully.
-- Design the software architecture based on the requirements.
-- Divide the system into modules and components.
+- Design the software architecture based on the requirements, by dividing the system into modules and components.
 
-After designing the architecture, output in VALID JSON format:
+Note that:
+- Each module will be implemented separately by different teams. They will **independently** implement the modules and integrate them later. So, make sure your design is modular and scalable, and your architecture is clear and concise.
+- Try to limit the number of modules.
+
+After designing the architecture, output in VALID JSON format. Your output starts with "{" and ends with "}". "name" and "sub_dir" should use snake_case.
 {
     "name": "name_of_the_software",
     "modules": [
@@ -52,14 +56,6 @@ After designing the architecture, output in VALID JSON format:
         }
     ]
 }
-
-Note that:
-- Each module will be implemented separately by different teams. They will **independently** implement the modules and integrate them later. So, make sure your design is modular and scalable, and your architecture is clear and concise.
-- Your output starts with "{" and ends with "}".
-- module_name should use snake_case.
-- Do NOT design any testing modules. They will be designed by the quality assurance engineer.
-- Do NOT design any documentation modules. They will be designed by the documentation engineer.
-- Try to limit the number of modules, but make sure the modules are independent and can be implemented separately.
 """
 
 PROGRAMMER_FRAMEWORK = """

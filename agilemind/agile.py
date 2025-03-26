@@ -18,6 +18,7 @@ from rich.box import ROUNDED
 from utils import format_cost
 from datetime import timedelta
 from tool import get_all_tools
+from utils import extract_json
 from prompt import agile_prompt
 from rich import print as rich_print
 from execution import deterministic_generation
@@ -25,13 +26,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from checker import check_syntax, check_imports, format_error_message
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-syntax_debugger = Agent(
-    "syntax_debugger",
-    "debug syntax",
-    agile_prompt.SYNTAX_DEBUGGER,
-    tools=get_all_tools("file_system", "development"),
-    generation_params=deterministic_generation,
-)
 debugger = Agent(
     "debugger",
     "debug software",
@@ -43,6 +37,13 @@ quality_assurance = Agent(
     "quality_assurance",
     "assure software quality",
     agile_prompt.QUALITY_ASSURANCE,
+    generation_params=deterministic_generation,
+)
+syntax_debugger = Agent(
+    "syntax_debugger",
+    "debug syntax",
+    agile_prompt.SYNTAX_DEBUGGER,
+    tools=get_all_tools("file_system", "development"),
     generation_params=deterministic_generation,
 )
 logic_programmer = Agent(
@@ -131,14 +132,14 @@ def run_workflow(
             context, json.dumps(demand_analysis), max_iterations
         )
         context.add_history("architecture", architecture)
-        architecture = json.loads(architecture[-1]["output"])
+        architecture = extract_json(architecture[-1]["output"])
         progress.update(
             arch_task, completed=1, description="[bold green]Architecture created"
         )
         context.set_document("architecture", json.dumps(architecture, indent=4))
 
         # Implement modules
-        modules = architecture["modules"]
+        modules = architecture.get("modules", [])
         modules_task = progress.add_task("Implementing modules...", total=1)
         inplemented_modules = structure_programmer.process(
             context,
@@ -245,11 +246,11 @@ def run_workflow(
             completed=1,
             description=f"[bold green]Quality assurance round {qa_round} completed",
         )
-        qa_report = json.loads(qa_report[-1]["output"])
+        qa_report = extract_json(qa_report[-1]["output"])
 
         # Fix the bugs if any
-        if qa_report["is_buggy"]:
-            bugs = qa_report["bugs"]
+        if qa_report.get("is_buggy", False):
+            bugs = qa_report.get("bugs", [])
             debugger_task = progress.add_task("Debugging software...", total=len(bugs))
             debug_result = debugger.process(
                 context, json.dumps(qa_report), max_iterations
@@ -261,7 +262,7 @@ def run_workflow(
     total_time = time.time() - start_time
     time_str = str(timedelta(seconds=int(total_time)))
     software_name = architecture["name"]
-    module_count = len(modules)
+    module_count = max(len(modules), 1)
     file_count = len(context.code.uptodated.keys())
     lines_of_code = sum(len(f.split("\n")) for f in context.code.uptodated.values())
     doc_count = len(context.document)
@@ -357,7 +358,7 @@ def run_workflow(
     return context.dump()
 
 
-def dev(demand: str, output: str, model: str) -> dict:
+def dev(demand: str, output: str, model: str, max_iterations: int) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
 
@@ -365,6 +366,7 @@ def dev(demand: str, output: str, model: str) -> dict:
         demand: User demand for the software
         output: Directory path to save the software
         model: String name of the model to use
+        max_iterations: Maximum number of iterations to run
 
     Returns:
         Dictionary containing the software development process
@@ -395,7 +397,7 @@ def dev(demand: str, output: str, model: str) -> dict:
     os.chdir(output)
 
     try:
-        result = run_workflow(demand, model=model)
+        result = run_workflow(demand, model=model, max_iterations=max_iterations)
 
         with open("docs/development_record.json", "w") as f:
             f.write(json.dumps(result, indent=4))

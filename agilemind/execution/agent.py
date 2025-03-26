@@ -9,8 +9,8 @@ from context import Context
 from tool import execute_tool
 from dotenv import load_dotenv
 from .config import GenerationParams
-from utils import retry, calculate_cost
 from typing import List, Optional, Dict
+from utils import retry, calculate_cost, clean_json_string
 
 
 load_dotenv()
@@ -242,7 +242,10 @@ class Agent:
 
             # Save the response if a save path is specified
             if self.save_path and response_message.content:
-                self.save_response(response_message.content)
+                if self.save_path.endswith(".json"):
+                    self.save_response(clean_json_string(response_message.content))
+                else:
+                    self.save_response(response_message.content)
 
             # Check for handoff or tool calls
             handoff_requested = False
