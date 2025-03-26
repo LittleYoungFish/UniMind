@@ -55,7 +55,11 @@ class Tools:
             return {"success": False, "message": f"Failed to create file: {str(e)}"}
 
     @staticmethod
-    @tool("read_file", description="Read the content of a file", group="file_system")
+    @tool(
+        "read_file",
+        description="Read the content of a file",
+        group="file_system",
+    )
     def read_file(context: Context, path: str) -> Dict[str, Any]:
         """
         Read and return the content of a file.
@@ -92,7 +96,6 @@ class Tools:
         "execute_command",
         description="Execute a shell command",
         confirmation_required=True,
-        group="system",
     )
     def execute_command(
         context: Context, command: str, cwd: Optional[str] = None
@@ -152,7 +155,6 @@ class Tools:
     @tool(
         "delete_file",
         description="Delete a file or directory",
-        group="file_system",
     )
     def delete_file(context: Context, path: str) -> Dict[str, Any]:
         """
@@ -235,7 +237,7 @@ class Tools:
 
     @staticmethod
     @tool(
-        "get_code_structure",
+        "get_project_structure",
         description="Get the code structure of a module or all modules",
         group="development",
     )
