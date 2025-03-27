@@ -1,8 +1,10 @@
+import re
 import ast
-from typing import Dict, Union, Tuple, Optional
+from .interface import AbsChecker
+from typing import Dict, List, Union, Tuple, Optional
 
 
-def check(code: str) -> Dict[str, Union[bool, str]]:
+def check_syntax(code: str) -> Dict[str, Union[bool, str]]:
     """
     Checks if a given Python code string contains syntax errors by attempting to build an AST.
 
@@ -27,7 +29,9 @@ def check(code: str) -> Dict[str, Union[bool, str]]:
     except SyntaxError as e:
         # Capture syntax error details
         error_line = code.splitlines()[e.lineno - 1]
-        result["error"] = f'Syntax error at line {e.lineno}, "{error_line}": {e.msg}'
+        result["error"] = (
+            f'Syntax error at line {e.lineno} column {e.offset}, "{error_line}": {e.msg}'
+        )
         return result
     except Exception as e:
         # Catch any other parsing errors
@@ -70,3 +74,28 @@ def has_syntax_error(code: str) -> bool:
         return False
     except:
         return True
+
+
+class SyntaxChecker(AbsChecker):
+    """
+    A checker that verifies if the given Python code string contains syntax errors.
+    """
+
+    @property
+    def name(self) -> str:
+        return "Syntax Checker"
+
+    def check(self, code: str) -> List[Dict[str, str]]:
+        error = check_syntax(code)
+        if error["valid"]:
+            return []
+        pattern = r"Syntax error at line (\d+) column (\d+), \"(.+)\": (.+)"
+        return [
+            {
+                "line": int(match.group(1)),
+                "column": int(match.group(2)),
+                "problematic_code": match.group(3),
+                "message": match.group(4),
+            }
+            for match in re.finditer(pattern, error["error"])
+        ]

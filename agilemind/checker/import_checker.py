@@ -2,6 +2,7 @@ import os
 import sys
 import ast
 import importlib
+from .interface import AbsChecker
 from typing import Dict, List, Tuple
 
 
@@ -107,3 +108,20 @@ def format_error_message(errors: Dict[Tuple[str, int], str]) -> str:
         error_msg += f'\n  - Line {lineno}: "{stmt}": {error}'
 
     return error_msg
+
+
+class ImportChecker(AbsChecker):
+    """
+    A checker that verifies if all imports in the code can be successfully imported.
+    """
+
+    @property
+    def name(self) -> str:
+        return "Import Checker"
+
+    def check(self, code: str) -> List[Dict[str, str]]:
+        errors = check_imports(code)
+        return [
+            {"line": lineno, "column": 0, "problematic_code": stmt, "message": error}
+            for (stmt, lineno), error in errors.items()
+        ]

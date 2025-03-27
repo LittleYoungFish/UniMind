@@ -1,6 +1,7 @@
 import re
 import tempfile
 import subprocess
+from .interface import AbsChecker
 from typing import Any, List, Dict
 
 
@@ -149,4 +150,26 @@ def check_file_with_pylint(file_path: str) -> List[Dict[str, Any]]:
                 "column": 0,
                 "message": f"Error running PyLint: {str(e)}",
             }
+        ]
+
+
+class PylintChecker(AbsChecker):
+    """
+    A checker that verifies Python code using PyLint.
+    """
+
+    @property
+    def name(self) -> str:
+        return "PyLint Checker"
+
+    def check(self, code: str) -> List[Dict[str, str]]:
+        errors = check_code_with_pylint(code)
+        return [
+            {
+                "line": error["line"],
+                "column": error["column"],
+                "problematic_code": code.splitlines()[error["line"] - 1],
+                "message": error["message"],
+            }
+            for error in errors
         ]

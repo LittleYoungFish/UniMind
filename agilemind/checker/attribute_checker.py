@@ -1,6 +1,8 @@
+import re
 import ast
 import inspect
 import importlib
+from .interface import AbsChecker
 from typing import List, Optional, Dict, Any, Set
 
 
@@ -156,27 +158,30 @@ class AttributeAccessVisitor(ast.NodeVisitor):
                         attributes_set.add(target.attr)
 
 
-class AttributeChecker:
+class AttributeChecker(AbsChecker):
     """
     Checks if attribute accesses in Python code are valid.
     """
 
-    def __init__(self, code_str: str):
+    def __init__(self):
         """
         Initialize with the Python code to check.
 
         Args:
             code_str (str): String containing Python code
         """
-        self.code_str = code_str
         self.tree = None
         self.visitor = None
         self.errors = []
 
-    def parse(self):
+    @property
+    def name(self) -> str:
+        return "Attribute Checker"
+
+    def parse(self, code_str: str):
         """Parse the code string into an AST"""
         try:
-            self.tree = ast.parse(self.code_str)
+            self.tree = ast.parse(code_str)
             self.visitor = AttributeAccessVisitor()
             self.visitor.visit(self.tree)
             return True
@@ -430,18 +435,45 @@ class AttributeChecker:
         # If we can't determine the return type, just return None
         return None
 
+    def check_attribute_access(self, code_str: str) -> List[str]:
+        """
+        Check a string of Python code for invalid attribute accesses.
 
-def check_attribute_access(code_str: str) -> List[str]:
-    """
-    Check a string of Python code for invalid attribute accesses.
+        Args:
+            code_str (str): String containing Python code
 
-    Args:
-        code_str (str): String containing Python code
+        Returns:
+            List of error messages for invalid attribute accesses
+        """
+        if self.parse(code_str):
+            return self.check_attributes()
+        return self.errors
 
-    Returns:
-        List of error messages for invalid attribute accesses
-    """
-    checker = AttributeChecker(code_str)
-    if checker.parse():
-        return checker.check_attributes()
-    return checker.errors
+    def check(self, code: str) -> List[Dict[str, str]]:
+        """
+        Check the given code for invalid attribute accesses.
+
+        Args:
+            code (str): The code to check
+
+        Returns:
+            out (List[Dict[str, Any]]): A list of dictionaries containing information about issues found.
+                                 Each dictionary should typically contain information like:
+                                 - 'line': line number of the issue
+                                 - 'column': column number of the issue
+                                 - 'problematic_code': code snippet that caused the issue
+                                 - 'message': description of the issue
+        """
+        self.errors = self.check_attribute_access(code)
+        pattern = r"^Line (\d+), Col (\d+): (.*?)$"
+        matches = [re.match(pattern, err) for err in self.errors]
+        return [
+            {
+                "line": int(match.group(1)),
+                "column": int(match.group(2)),
+                "problematic_code": code.splitlines()[int(match.group(1)) - 1],
+                "message": match.group(3),
+            }
+            for match in matches
+            if match
+        ]
