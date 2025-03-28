@@ -24,7 +24,7 @@ def clean_json_string(input_string: str) -> str:
     if not input_string:
         return ""
 
-    json_pattern = r"({[\s\S]*?})"
+    json_pattern = r"({[\s\S]*}|\[.*\])"
     json_matches = re.findall(json_pattern, input_string)
 
     for match in json_matches:
