@@ -7,9 +7,9 @@ import signal
 import argparse
 from rich.align import Align
 from rich.panel import Panel
+from .fixed import dev as fixed_dev
 from .agile import dev as agile_dev
 from rich import print as rich_print
-from .waterfall import dev as waterfall_dev
 
 interrupt_counter = 0
 
@@ -94,7 +94,7 @@ def entry() -> None:
     method = args["pipeline"]
     args.pop("pipeline")
     if method == "waterfall":
-        waterfall_dev(**args)
+        fixed_dev(**args)
     elif method == "agile":
         agile_dev(**args)
     else:
