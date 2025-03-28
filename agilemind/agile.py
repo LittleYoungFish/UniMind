@@ -20,10 +20,10 @@ from datetime import timedelta
 from tool import get_all_tools
 from utils import extract_json
 from prompt import agile_prompt
+from checker import static_checkers
 from rich import print as rich_print
 from execution import deterministic_generation
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from checker import check_syntax, check_imports, format_error_message
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 debugger = Agent(
@@ -125,6 +125,7 @@ def run_workflow(
         )
         context.set_document("demand_analysis", demand_analysis[-1]["output"])
         context.add_history("demand_analysis", demand_analysis)
+        demand_report = extract_json(demand_analysis[-1]["output"])
 
         # Architecture step
         arch_task = progress.add_task("Building architecture...", total=1)
@@ -136,14 +137,14 @@ def run_workflow(
         progress.update(
             arch_task, completed=1, description="[bold green]Architecture created"
         )
-        context.set_document("architecture", json.dumps(architecture, indent=4))
+        context.set_document("architecture", json.dumps(architecture))
 
         # Implement modules
         modules = architecture.get("modules", [])
         modules_task = progress.add_task("Implementing modules...", total=1)
         inplemented_modules = structure_programmer.process(
             context,
-            json.dumps(demand_analysis) + "\n\n" + json.dumps(modules),
+            json.dumps(demand_report) + "\n\n" + json.dumps(modules),
             max_iterations,
         )
         context.add_history("modules", inplemented_modules)
@@ -208,34 +209,67 @@ def run_workflow(
             progress.remove_task(subtask)
 
         # Check the syntax of the implemented code
-        syntax_task = progress.add_task("Checking code syntax...", total=len(files))
-        for idx, file in enumerate(context.code.uptodated.keys()):
+        syntax_task = progress.add_task(
+            "Checking code syntax...", total=len(context.code.uptodated)
+        )
+        completed_count = 0
+        syntax_subtasks = []
+
+        def check_syntax(file: str) -> tuple[str, dict]:
+            """
+            Check syntax of a single file.
+
+            Args:
+                file: File to check
+
+            Returns:
+                Tuple containing the file name and any syntax errors found
+            """
+            file_syntax_subtask = progress.add_task(
+                f"    Checking syntax for {file}...", total=1
+            )
+            syntax_subtasks.append(file_syntax_subtask)
+
             error_info = f"in {file}: \n\n"
+            static_checkers_result = static_checkers.run(context.code.uptodated[file])
 
-            syntax = check_syntax(context.code.uptodated[file])
-            if not syntax["valid"]:
-                error_info += f"{syntax['error']}\n\n\n"
+            if static_checkers_result:
+                error_info += json.dumps(static_checkers_result)
+                context.add_history(f"static_check_{file}", static_checkers_result)
+                syntax_debugger.process(context, error_info, max_iterations)
 
-            imports = check_imports(context.code.uptodated[file])
-            if imports:
-                error_info += format_error_message(imports)
-
-            if not syntax["valid"] or imports:
-                syntax_debugging = syntax_debugger.process(
-                    context, error_info, max_iterations
-                )
-                context.add_history(f"syntax_{file}", syntax_debugging)
             progress.update(
-                syntax_task,
-                description=(
-                    ("[bold green]" if idx == len(files) - 1 else "")
-                    + f"Syntax of {idx + 1}/{len(files)} files checked"
-                ),
-                completed=idx + 1,
+                file_syntax_subtask,
+                completed=1,
+                description=f"    [bold green]Syntax for {file} checked",
             )
 
+            return file, static_checkers_result
+
+        # Execute syntax checks in parallel
+        with ThreadPoolExecutor() as executor:
+            future_to_file = {
+                executor.submit(check_syntax, file): file
+                for file in context.code.uptodated.keys()
+            }
+            for future in as_completed(future_to_file):
+                _, _ = future.result()
+                completed_count += 1
+                progress.update(
+                    syntax_task,
+                    description=(
+                        ("[bold green]" if completed_count == len(files) else "")
+                        + f"Syntax of {completed_count}/{len(files)} files checked"
+                    ),
+                    completed=completed_count,
+                )
+
+        # Clean up subtasks
+        for subtask in syntax_subtasks:
+            progress.remove_task(subtask)
+
         # Quality assurance step
-        qa_round = 0
+        qa_round = 1
         qa_task = progress.add_task("Assuring software quality...", total=1)
         qa_report = quality_assurance.process(
             context, json.dumps(list(context.code.uptodated.keys())), max_iterations
@@ -399,7 +433,7 @@ def dev(demand: str, output: str, model: str, max_iterations: int) -> dict:
     try:
         result = run_workflow(demand, model=model, max_iterations=max_iterations)
 
-        with open("docs/development_record.json", "w") as f:
+        with open("logs/development_record.json", "w") as f:
             f.write(json.dumps(result, indent=4))
     finally:
         os.chdir(initial_cwd)  # Restore original working directory
