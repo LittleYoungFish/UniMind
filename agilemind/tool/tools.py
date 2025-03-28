@@ -19,8 +19,8 @@ class Tools:
         Write content to a file. If the file already exists, it will be overwritten. Otherwise, a new file will be created.
 
         Args:
-            path: The path to the file to write. Use relative path.
-            content: The content to write to the file. When creating a code file, 'content' will be written derectly to the file so make sure it is a valid code.
+            path: The path to the file to write. You are currently in the root directory of the project. Use relative path.
+            content: The content to write to the file. When creating a code file, make sure it is a valid code.
 
         Returns:
             Dict containing success status and message
