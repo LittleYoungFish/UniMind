@@ -62,3 +62,34 @@ def _substitute_env_vars(obj: Any) -> Any:
         return re.sub(pattern, replace_env_var, obj)
     else:
         return obj
+
+
+def extract_agent_llm_config(agent_name: str, config: dict) -> dict:
+    """
+    Extract LLM configuration for a specific agent from the config file.
+
+    Args:
+        agent_name (str): Name of the agent
+        config (dict): Configuration dictionary
+
+    Returns:
+        Dictionary containing the LLM configuration for the agent
+    """
+    config = config or {}
+
+    default_config = config.get("default") or {}
+    default_llm_config = default_config.get("llm") or {}
+    defalt_base_url = default_llm_config.get("api_base_url")
+    default_model = default_llm_config.get("model")
+
+    workflow_config = config.get("workflow") or {}
+    agent_config = workflow_config.get(agent_name) or {}
+    agent_base_url = agent_config.get("api_base_url") or defalt_base_url
+    agent_api_key = agent_config.get("api_key") or None
+    agent_model = agent_config.get("model") or default_model
+
+    return {
+        "llm_api_key": agent_api_key,
+        "llm_base_url": agent_base_url,
+        "model": agent_model,
+    }

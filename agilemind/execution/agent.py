@@ -15,11 +15,6 @@ from utils import retry, calculate_cost, clean_json_string
 
 load_dotenv()
 
-client = openai.OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("OPENAI_API_BASE_URL"),
-)
-
 
 class Agent:
     """
@@ -40,6 +35,8 @@ class Agent:
         model: str = "gpt-4o-mini",
         save_path: Optional[str] = None,  # Path to save agent responses
         generation_params: Optional[GenerationParams] = None,
+        llm_base_url: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
     ):
         """
         Initialize an Agent instance.
@@ -53,6 +50,9 @@ class Agent:
             next_agent: Optional next agent for forced handoff regardless of the agent's decision.
             model: OpenAI model to use for this agent
             save_path: Optional path to save agent's responses for documentation purposes
+            generation_params: Optional parameters for the model generation
+            llm_base_url: Optional base URL for the OpenAI API
+            llm_api_key: Optional API key for the OpenAI API
         """
         self.name = name
         self.description = description
@@ -64,6 +64,11 @@ class Agent:
         self.save_path = save_path
         self.rounds = []  # Track information by round
         self.generation_params = generation_params
+
+        self.client = openai.OpenAI(
+            api_key=llm_api_key or os.getenv("OPENAI_API_KEY"),
+            base_url=llm_base_url or os.getenv("OPENAI_API_BASE_URL"),
+        )
 
     def __repr__(self) -> str:
         """Return string representation of the Agent."""
@@ -182,7 +187,7 @@ class Agent:
             round_number += 1
 
             try:
-                response = client.chat.completions.create(
+                response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     tools=tools_with_handoffs if tools_with_handoffs else None,
@@ -337,9 +342,7 @@ class Agent:
 
     def _prepare_messages(self, input_text: str) -> List[Dict]:
         """Prepare the message for the API call."""
-        # Start with system instructions
-        messages = [{"role": "system", "content": self.instructions}]
-        # Add the current input
-        messages.append({"role": "user", "content": input_text})
-
-        return messages
+        return [
+            {"role": "system", "content": self.instructions},
+            {"role": "user", "content": input_text},
+        ]

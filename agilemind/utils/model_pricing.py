@@ -30,6 +30,15 @@ class ModelPricing(Enum):
     GPT_4O_MINI = ModelPrice(0.00015, 0.0006, "GPT-4o Mini")
     GPT_4O = ModelPrice(0.0025, 0.01, "GPT-4o")
 
+    # Anthropic models
+    CLAUDE_3_7_SONNET_20250219 = ModelPrice(
+        0.0033, 0.0165, "Claude 3.7 Sonnet 20250219"
+    )
+
+    # Deepseek models
+    DEEPSEEK_V3 = ModelPrice(0.000272, 0.001088, "DeepSeek V3")
+    DEEPSEEK_R1 = ModelPrice(0.000546, 0.002184, "DeepSeek R1")
+
     def known_models() -> list:
         """Return a list of known model names"""
         return [model.name for model in ModelPricing]
