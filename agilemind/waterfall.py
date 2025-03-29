@@ -1,5 +1,5 @@
 """
-Development of software using Agile methodology.
+Development of software using waterfall methodology.
 """
 
 import os
@@ -19,7 +19,7 @@ from utils import format_cost
 from datetime import timedelta
 from tool import get_all_tools
 from utils import extract_json
-from prompt import agile_prompt
+from prompt import waterfall_prompt
 from checker import static_checkers
 from rich import print as rich_print
 from execution import deterministic_generation
@@ -29,48 +29,48 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 debugger = Agent(
     "debugger",
     "debug software",
-    agile_prompt.PROGRAMMER_DEBUGGING,
+    waterfall_prompt.PROGRAMMER_DEBUGGING,
     tools=get_all_tools("file_system", "development"),
     generation_params=deterministic_generation,
 )
 quality_assurance = Agent(
     "quality_assurance",
     "assure software quality",
-    agile_prompt.QUALITY_ASSURANCE,
+    waterfall_prompt.QUALITY_ASSURANCE,
     generation_params=deterministic_generation,
 )
 syntax_debugger = Agent(
     "syntax_debugger",
     "debug syntax",
-    agile_prompt.SYNTAX_DEBUGGER,
+    waterfall_prompt.SYNTAX_DEBUGGER,
     tools=get_all_tools("file_system", "development"),
     generation_params=deterministic_generation,
 )
 logic_programmer = Agent(
     "logic_programmer",
     "implement software logic",
-    agile_prompt.PROGRAMMER_LOGIC,
+    waterfall_prompt.PROGRAMMER_LOGIC,
     tools=get_all_tools("file_system", "development"),
     generation_params=deterministic_generation,
 )
 structure_programmer = Agent(
     "structure_programmer",
     "implement software structure",
-    agile_prompt.PROGRAMMER_FRAMEWORK,
+    waterfall_prompt.PROGRAMMER_FRAMEWORK,
     tools=get_all_tools("file_system", "development"),
     generation_params=deterministic_generation,
 )
 architect = Agent(
     "architect",
     "create software architecture",
-    agile_prompt.ARCHITECT,
+    waterfall_prompt.ARCHITECT,
     save_path="docs/software_architecture.json",
     generation_params=deterministic_generation,
 )
 demand_analyst = Agent(
     "demand_analyst",
     "analyze user demand",
-    agile_prompt.DEMAND_ANALYST,
+    waterfall_prompt.DEMAND_ANALYST,
     save_path="docs/demand_analysis.md",
     generation_params=deterministic_generation,
 )

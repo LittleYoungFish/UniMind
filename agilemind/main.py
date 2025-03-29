@@ -7,11 +7,13 @@ import signal
 import argparse
 from rich.align import Align
 from rich.panel import Panel
+from rich.console import Console
 from .fixed import dev as fixed_dev
-from rich import print as rich_print
+from .agile import dev as agile_dev
 from .waterfall import dev as waterfall_dev
 
 interrupt_counter = 0
+console = Console()
 
 
 def signal_handler(sig, frame):
@@ -20,16 +22,19 @@ def signal_handler(sig, frame):
     interrupt_counter += 1
 
     if interrupt_counter >= 3:
-        rich_print(
+        console.print(
             Panel(
                 Align.center("[bold red]Received 3 interrupts. Aborting program."),
                 title="Shutting Down",
                 border_style="red",
-            )
+            ),
+            new_line_start=True,
         )
         sys.exit(1)
     else:
-        rich_print(f"[yellow]Press Ctrl+C {3 - interrupt_counter} more times to abort")
+        console.print(
+            f"[yellow]Press Ctrl+C {3 - interrupt_counter} more times to abort",
+        )
         return
 
 
@@ -58,10 +63,11 @@ def parse_args() -> argparse.Namespace:
         "-p",
         "--pipeline",
         type=str,
-        default="waterfall",
+        default="agile",
         choices=[
             "fixed",
             "waterfall",
+            "agile",
         ],
         help="Pipeline type to use for development",
     )
@@ -97,5 +103,7 @@ def entry() -> None:
         fixed_dev(**args)
     elif method == "waterfall":
         waterfall_dev(**args)
+    elif method == "agile":
+        agile_dev(**args)
     else:
         raise ValueError(f"Invalid pipeline method: {method}")
