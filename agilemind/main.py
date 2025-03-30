@@ -7,13 +7,12 @@ import signal
 import argparse
 from rich.align import Align
 from rich.panel import Panel
-from rich.console import Console
+from rich import print as rprint
 from .fixed import dev as fixed_dev
 from .agile import dev as agile_dev
 from .waterfall import dev as waterfall_dev
 
 interrupt_counter = 0
-console = Console()
 
 
 def signal_handler(sig, frame):
@@ -22,17 +21,16 @@ def signal_handler(sig, frame):
     interrupt_counter += 1
 
     if interrupt_counter >= 3:
-        console.print(
+        rprint(
             Panel(
                 Align.center("[bold red]Received 3 interrupts. Aborting program."),
                 title="Shutting Down",
                 border_style="red",
             ),
-            new_line_start=True,
         )
         sys.exit(1)
     else:
-        console.print(
+        rprint(
             f"[yellow]Press Ctrl+C {3 - interrupt_counter} more times to abort",
         )
         return

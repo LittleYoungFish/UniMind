@@ -3,15 +3,8 @@ Retry decorator utility for handling transient failures with Rich visualization.
 """
 
 import time
-from rich.box import SIMPLE
 from functools import wraps
-from rich.table import Table
-from rich.panel import Panel
-from rich.align import Align
 from typing import Type, List
-from rich.console import Console
-
-console = Console()
 
 
 def retry(
@@ -40,46 +33,24 @@ def retry(
         def wrapper(*args, **kwargs):
             attempt = 1
             current_delay = delay
-            table = None
 
             while attempt <= max_attempts:
                 try:
                     return func(*args, **kwargs)
 
                 except tuple(exceptions) as e:
-                    # Create a simple table for retry status
-                    table = Table(box=SIMPLE)
-                    table.add_column("Attempt", style="cyan")
-                    table.add_column("Function", style="blue")
-                    table.add_column("Error", style="yellow")
-                    table.add_column("Next retry", style="green")
-                    table.add_row(
-                        f"{attempt}/{max_attempts}",
-                        func.__name__,
-                        str(e),
-                        f"in {current_delay:.2f}s",
-                    )
                     if attempt < max_attempts:
-                        console.print(
-                            Panel(
-                                Align.center(table),
-                                title="Retry in Progress",
-                                border_style="yellow",
-                            ),
-                            new_line_start=True,
+                        print(
+                            f"[Att. {attempt}/{max_attempts}. Retrying in {current_delay:.2f}s]\nError: {e}"
                         )
                         time.sleep(current_delay)
                         current_delay *= backoff_factor
                         attempt += 1
                     else:
-                        console.print(
-                            Panel(
-                                Align.center(table),
-                                title="Max Retries Exceeded",
-                                border_style="red bold",
-                            ),
-                            new_line_start=True,
+                        print(
+                            f"[Att. {attempt}/{max_attempts}. Max retries exceeded. Exiting.]\nError: {e}"
                         )
+                        time.sleep(1)
                         exit(1)
 
         return wrapper

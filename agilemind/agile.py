@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.align import Align
 from prompt import agile_prompt
 from rich.console import Console
+from rich import print as rprint
 from utils.window import LogWindow
 from utils import load_config, extract_agent_llm_config
 
@@ -60,6 +61,7 @@ def build_prototype(
     revision_count = 0
     feedback = ""
     while not client_satisfied and revision_count < max_iterations:
+        window.hide()
         console.print(
             Panel(
                 Align.center(
@@ -88,6 +90,7 @@ def build_prototype(
                 feedback=feedback,
             )
 
+            window.show()
             window.update_task(prototype_task, status="running")
             prototype = prototype_builder.process(
                 context, feedback_info, max_iterations
@@ -96,6 +99,30 @@ def build_prototype(
 
     window.complete_task(prototype_task)
     return prototype
+
+
+def build_architecture(
+    context: Context,
+    window: LogWindow,
+    demand: str,
+    feedback: str,
+    prototype: str,
+    max_iterations: int = 5,
+) -> dict:
+    """
+    Build a prototype of the software.
+
+    Args:
+        context (Context): Context object containing the software development process
+        window (LogWindow): CLI window for displaying progress
+        demand (str): User demand for the software
+        feedback (str): Feedback from the client
+        prototype (str): Final prototype of the software
+        max_iterations (int): Maximum number of iterations to run
+
+    Returns:
+        out: Dictionary containing the prototype development process
+    """
 
 
 def run_workflow(
@@ -148,7 +175,7 @@ def dev(
     """
     # If output dir exists, ask user whether to confirm purging it first
     if Path(output).exists():
-        console.print(
+        rprint(
             Panel(
                 Align.center(
                     f'The output directory "{output}" already exists. Do you want to delete its contents? (Y/n)'

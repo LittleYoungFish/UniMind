@@ -13,7 +13,55 @@ from rich.panel import Panel
 from datetime import datetime
 from rich.console import Group
 from rich.console import Console
-from typing import Any, Dict, Optional, Literal, List, Tuple
+from typing import Any, Dict, Optional, Literal, List, Tuple, Callable
+
+
+def intercept_print(log_window: "LogWindow", level: str = "INFO") -> Callable:
+    """
+    Intercept the built-in print function and redirect output to the LogWindow.
+
+    Args:
+        log_window: The LogWindow instance to send print output to
+        level: Log level to use for the intercepted print messages
+
+    Returns:
+        A function to restore the original print function
+    """
+    import builtins
+
+    original_print = builtins.print
+
+    def custom_print(*args, **kwargs):
+        # Extract file and sep kwargs if provided
+        file = kwargs.get("file", None)
+        sep = kwargs.get("sep", " ")
+
+        # If printing to a specific file (not stdout), use original print
+        if file is not None:
+            original_print(*args, **kwargs)
+            return
+
+        # Convert args to string with the specified separator
+        message = sep.join(str(arg) for arg in args)
+
+        log_level = level
+        if "error" in message.lower():
+            log_level = "ERROR"
+        elif "warning" in message.lower():
+            log_level = "WARNING"
+
+        # Log the message
+        log_window.log(message, level=log_level)
+
+    # Replace the built-in print with our custom function
+    builtins.print = custom_print
+
+    # Return a function to restore the original print
+    def restore_print():
+        builtins.print = original_print
+        return original_print
+
+    return restore_print
 
 
 class LogWindow:
@@ -26,6 +74,8 @@ class LogWindow:
         display_style: Literal["tree", "table"] = "tree",
         log_height: int = 5,
         window_height: Optional[int] = None,
+        intercept_print: bool = True,
+        print_log_level: str = "INFO",
     ):
         """
         Initialize the LogWindow.
@@ -36,6 +86,8 @@ class LogWindow:
             display_style (Literal["tree", "table"]): Display style for tasks - "tree" or "table"
             log_height (int): Number of log lines to show in the log zone
             window_height (Optional[int]): Total height of the window. If None, uses full terminal height
+            intercept_print (bool): Whether to automatically intercept print function calls
+            print_log_level (str): Log level to use for intercepted print messages
         """
         self.title = title
         self.console = Console()
@@ -51,6 +103,13 @@ class LogWindow:
         self.window_height = window_height
         self.full_screen = window_height is None
 
+        # Store the print restore function
+        self._restore_print = None
+
+        # Intercept print if requested
+        if intercept_print:
+            self._restore_print = self.intercept_print(level=print_log_level)
+
         self._calculate_heights()
 
     def _calculate_heights(self):
@@ -58,11 +117,7 @@ class LogWindow:
         if self.full_screen:
             _, height = self.console.size
             self.window_height = height
-            self.task_zone_height = (
-                self.window_height - self.log_height - 3
-                if self.display_style == "tree"
-                else self.window_height - self.log_height - 4
-            )
+            self.task_zone_height = self.window_height - self.log_height - 4
 
     def __enter__(self):
         """Context manager entry point."""
@@ -91,6 +146,11 @@ class LogWindow:
             self._live.stop()
             self._live = None
             self.hidden = False
+
+        # Restore original print function if it was intercepted
+        if self._restore_print is not None:
+            self._restore_print()
+            self._restore_print = None
 
     def hide(self):
         """Temporarily hide the log window without closing it."""
@@ -227,6 +287,18 @@ class LogWindow:
         self.logs = []
         if self._live:
             self._live.update(self._generate_display())
+
+    def intercept_print(self, level: str = "INFO") -> Callable:
+        """
+        Intercept the built-in print function and redirect output to this LogWindow.
+
+        Args:
+            level: Log level to use for the intercepted print messages
+
+        Returns:
+            A function to restore the original print function
+        """
+        return intercept_print(self, level)
 
     def _generate_display(self) -> Panel:
         """Generate the display content."""
