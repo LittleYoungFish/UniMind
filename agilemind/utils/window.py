@@ -37,6 +37,7 @@ class LogWindow:
         self._live: Optional[Live] = None
         self.refresh_per_second = refresh_per_second
         self.display_style = display_style
+        self.hidden = False
 
     def __enter__(self):
         """Context manager entry point."""
@@ -56,6 +57,7 @@ class LogWindow:
             screen=True,
         )
         self._live.start()
+        self.hidden = False
         return self
 
     def close(self):
@@ -63,6 +65,42 @@ class LogWindow:
         if self._live:
             self._live.stop()
             self._live = None
+            self.hidden = False
+
+    def hide(self):
+        """Temporarily hide the log window without closing it."""
+        if self._live and not self.hidden:
+            # Save current state before stopping
+            self._saved_display = self._generate_display()
+            self._live.stop()
+            self._live = None
+            self.hidden = True
+            # Clear the screen to remove the display
+            self.console.clear()
+
+    def show(self):
+        """Show the log window if it was hidden."""
+        if self.hidden:
+            # Restart with the saved display
+            self._live = Live(
+                (
+                    self._saved_display
+                    if hasattr(self, "_saved_display")
+                    else self._generate_display()
+                ),
+                console=self.console,
+                refresh_per_second=self.refresh_per_second,
+                screen=True,
+            )
+            self._live.start()
+            self.hidden = False
+
+    def toggle_visibility(self):
+        """Toggle the visibility of the log window."""
+        if self.hidden:
+            self.show()
+        else:
+            self.hide()
 
     def add_task(
         self, description: str, parent_id: Optional[str] = None, status: str = "pending"
