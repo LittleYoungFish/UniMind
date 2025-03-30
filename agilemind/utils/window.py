@@ -111,7 +111,7 @@ class LogWindow:
 
         Args:
             task_id (str): ID of the task to update
-            status (str): New status
+            status (str): New status, e.g., "pending", "running", "completed", "failed"
             description (Optional[str]): New description (if provided)
         """
         if task_id in self.tasks:
