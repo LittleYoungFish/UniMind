@@ -6,5 +6,5 @@ from .attribute_checker import AttributeChecker
 
 static_checkers = CheckerPipeline()
 static_checkers.add_checker(
-    SyntaxChecker, ImportChecker, AttributeChecker, PylintChecker
+    SyntaxChecker(), ImportChecker(), AttributeChecker(), PylintChecker()
 )

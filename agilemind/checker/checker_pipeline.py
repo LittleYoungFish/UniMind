@@ -32,7 +32,7 @@ class CheckerPipeline:
             code (str): The code to check
 
         Returns:
-            List[Dict[str, Any]]: Results from the first checker that finds issues,
+            out (List[Dict[str, Any]]): Results from the first checker that finds issues,
                                   or an empty list if no issues are found
         """
         for checker in self._checkers:
