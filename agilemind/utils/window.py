@@ -1,119 +1,250 @@
 """
-CLI window display using rich to show live updates and logs.
+CLI window display using rich to show live updates.
 """
 
-from rich.text import Text
+import uuid
+from rich import box
 from rich.live import Live
+from rich.tree import Tree
 from rich.table import Table
 from rich.panel import Panel
-from collections import deque
-from rich.layout import Layout
-from rich.console import Group
-from rich.spinner import Spinner
-from typing import Optional, Deque, Dict, Any
+from datetime import datetime
+from rich.console import Console
+from typing import Any, Dict, Optional, Literal
 
 
 class LogWindow:
     """Live updating CLI window to display progress and logs."""
 
-    def __init__(self, title: str = "Agile Mind", max_logs: int = 5):
+    def __init__(
+        self,
+        title: str = "AgileMind",
+        refresh_per_second: float = 4,
+        display_style: Literal["tree", "table"] = "tree",
+    ):
         """
-        Initialize the CLI window.
+        Initialize the LogWindow.
 
         Args:
-            title: Window title
-            max_logs: Maximum number of log entries to display
+            title (str): The title of the window
+            refresh_per_second (float): How many times per second the display refreshes
+            display_style (Literal["tree", "table"]): Display style for tasks - "tree" or "table"
         """
         self.title = title
-        self.max_logs = max_logs
-        self.logs: Deque[str] = deque(maxlen=max_logs)
-        self.current_status: str = "Initializing..."
-        self.current_step: str = ""
-        self.live: Optional[Live] = None
-        self.active_spinner: Optional[str] = None
+        self.console = Console()
         self.tasks: Dict[str, Dict[str, Any]] = {}
+        self.task_hierarchy: Dict[str, Optional[str]] = {}  # task_id -> parent_id
+        self._live: Optional[Live] = None
+        self.refresh_per_second = refresh_per_second
+        self.display_style = display_style
 
     def __enter__(self):
-        """Start the live display when entering context."""
-        self.live = Live(
-            self._generate_layout(), auto_refresh=True, refresh_per_second=4
-        )
-        self.live.__enter__()
+        """Context manager entry point."""
+        self.open()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Stop the live display when exiting context."""
-        if self.live:
-            self.live.__exit__(exc_type, exc_val, exc_tb)
+        """Context manager exit point."""
+        self.close()
 
-    def update_status(self, status: str):
-        """Update the current status."""
-        self.current_status = status
-        self._refresh()
+    def open(self):
+        """Open and display the log window."""
+        self._live = Live(
+            self._generate_display(),
+            console=self.console,
+            refresh_per_second=self.refresh_per_second,
+            screen=True,
+        )
+        self._live.start()
+        return self
 
-    def start_task(self, task_id: str, description: str):
-        """Start a new task with a spinner."""
+    def close(self):
+        """Close the log window."""
+        if self._live:
+            self._live.stop()
+            self._live = None
+
+    def add_task(
+        self, description: str, parent_id: Optional[str] = None, status: str = "pending"
+    ) -> str:
+        """
+        Add a new task to the window.
+
+        Args:
+            description (str): Description of the task
+            parent_id (Optional[str]): Optional ID of the parent task
+            status (str): Initial status of the task
+
+        Returns:
+            task_id: Identifier for the added task
+        """
+        task_id = str(uuid.uuid4())
         self.tasks[task_id] = {
             "description": description,
-            "status": "running",
-            "spinner": Spinner("dots", text=description),
+            "status": status,
+            "time_added": datetime.now(),
         }
-        self.active_spinner = task_id
-        self._refresh()
+        self.task_hierarchy[task_id] = parent_id
+
+        if self._live:
+            self._live.update(self._generate_display())
+
+        return task_id
 
     def complete_task(self, task_id: str):
-        """Mark a task as completed."""
+        """
+        Mark a task as completed.
+
+        Args:
+            task_id (str): ID of the task to complete
+        """
         if task_id in self.tasks:
             self.tasks[task_id]["status"] = "completed"
-            if self.active_spinner == task_id:
-                self.active_spinner = None
-        self._refresh()
+            self.tasks[task_id]["time_completed"] = datetime.now()
 
-    def log(self, message: str):
-        """Add a log message to the window."""
-        self.logs.append(message)
-        self._refresh()
+            if self._live:
+                self._live.update(self._generate_display())
 
-    def _generate_layout(self) -> Panel:
-        """Generate the layout for the CLI window."""
-        # Create top status section
-        status_text = Text(f"Status: {self.current_status}", style="bold blue")
+    def update_task(self, task_id: str, status: str, description: Optional[str] = None):
+        """
+        Update a task's status and optionally its description.
 
-        # Create task progress section
-        tasks_table = Table(show_header=False, box=None, padding=(0, 1))
-        tasks_table.add_column(width=2)
-        tasks_table.add_column()
+        Args:
+            task_id (str): ID of the task to update
+            status (str): New status
+            description (Optional[str]): New description (if provided)
+        """
+        if task_id in self.tasks:
+            self.tasks[task_id]["status"] = status
+            if description:
+                self.tasks[task_id]["description"] = description
 
-        for task_id, task in self.tasks.items():
-            if task["status"] == "completed":
-                tasks_table.add_row("✓", task["description"], style="green")
-            elif self.active_spinner == task_id:
-                tasks_table.add_row(task["spinner"], task["description"])
-            else:
-                tasks_table.add_row("•", task["description"], style="dim")
+            if self._live:
+                self._live.update(self._generate_display())
 
-        # Create logs section
-        log_lines = [Text(log) for log in self.logs]
-        if not log_lines:
-            log_lines = [Text("No logs yet...", style="dim")]
+    def set_display_style(self, style: Literal["tree", "table"]):
+        """
+        Set the display style for the tasks.
 
-        logs_panel = Panel(
-            Group(*log_lines),
-            title="Logs",
-            height=min(len(log_lines) + 2, self.max_logs + 2),
+        Args:
+            style (Literal["tree", "table"]): Either "tree" or "table"
+        """
+        if style not in ["tree", "table"]:
+            raise ValueError("Display style must be either 'tree' or 'table'")
+
+        self.display_style = style
+        if self._live:
+            self._live.update(self._generate_display())
+
+    def _generate_display(self) -> Panel:
+        """Generate the display content."""
+        if self.display_style == "tree":
+            main_display = self._generate_task_tree()
+        else:
+            main_display = self._generate_task_table()
+
+        return Panel(
+            main_display,
+            title=f"[bold blue]{self.title}[/bold blue]",
+            border_style="blue",
+            box=box.ROUNDED,
         )
 
-        # Combine all sections
-        layout = Layout()
-        layout.split(
-            Layout(status_text, name="status", size=1),
-            Layout(tasks_table, name="tasks", size=len(self.tasks) + 1),
-            Layout(logs_panel, name="logs", size=self.max_logs + 2),
-        )
+    def _generate_task_tree(self) -> Tree:
+        """Generate a hierarchical tree of tasks."""
+        tree = Tree("[bold]Task Hierarchy[/bold]")
 
-        return Panel(layout, title=self.title, border_style="blue")
+        roots_found = False
+        for task_id, parent in self.task_hierarchy.items():
+            if parent is None:
+                roots_found = True
+                task = self.tasks[task_id]
+                status_style = self._get_status_style(task["status"])
 
-    def _refresh(self):
-        """Refresh the live display."""
-        if self.live:
-            self.live.update(self._generate_layout())
+                # Format task info
+                task_text = f"{task['description']} {status_style}"
+                time_info = f"[dim](Added: {task['time_added'].strftime('%H:%M:%S')}"
+                if "time_completed" in task:
+                    time_info += (
+                        f", Completed: {task['time_completed'].strftime('%H:%M:%S')}"
+                    )
+                time_info += ")[/dim]"
+
+                branch = tree.add(f"{task_text} {time_info}")
+                self._add_child_tasks(branch, task_id)
+
+        # If no root tasks were found, create a flat tree
+        if not roots_found and self.tasks:
+            for task_id, task in self.tasks.items():
+                status_style = self._get_status_style(task["status"])
+                task_text = f"{task['description']} {status_style}"
+                time_info = f"[dim](Added: {task['time_added'].strftime('%H:%M:%S')}"
+                if "time_completed" in task:
+                    time_info += (
+                        f", Completed: {task['time_completed'].strftime('%H:%M:%S')}"
+                    )
+                time_info += ")[/dim]"
+
+                tree.add(f"{task_text} {time_info}")
+
+        return tree
+
+    def _add_child_tasks(self, parent_branch, parent_id):
+        """Add child tasks to a parent branch."""
+        for task_id, parent in self.task_hierarchy.items():
+            if parent == parent_id:
+                task = self.tasks[task_id]
+                status_style = self._get_status_style(task["status"])
+
+                # Format task info
+                task_text = f"{task['description']} {status_style}"
+                time_info = f"[dim](Added: {task['time_added'].strftime('%H:%M:%S')}"
+                if "time_completed" in task:
+                    time_info += (
+                        f", Completed: {task['time_completed'].strftime('%H:%M:%S')}"
+                    )
+                time_info += ")[/dim]"
+
+                branch = parent_branch.add(f"{task_text} {time_info}")
+                self._add_child_tasks(branch, task_id)
+
+    def _generate_task_table(self) -> Table:
+        """Generate a table of tasks."""
+        table = Table(box=box.ROUNDED, show_header=True, header_style="bold")
+        table.add_column("ID", style="dim", width=8)
+        table.add_column("Description")
+        table.add_column("Status", justify="center")
+        table.add_column("Added", style="dim")
+        table.add_column("Completed", style="dim")
+
+        for i, (task_id, task) in enumerate(self.tasks.items()):
+            status_style = self._get_status_style(task["status"])
+            added_time = task["time_added"].strftime("%H:%M:%S")
+            completed_time = (
+                task.get("time_completed", "").strftime("%H:%M:%S")
+                if "time_completed" in task
+                else "-"
+            )
+
+            table.add_row(
+                f"{i+1:2d}",
+                task["description"],
+                status_style,
+                added_time,
+                completed_time,
+            )
+
+        return table
+
+    def _get_status_style(self, status: str) -> str:
+        """Get styled status text based on status value."""
+        if status == "completed":
+            return "[green]COMPLETED[/green]"
+        elif status == "pending":
+            return "[yellow]PENDING[/yellow]"
+        elif status == "failed":
+            return "[red]FAILED[/red]"
+        elif status == "running":
+            return "[blue]RUNNING[/blue]"
+        else:
+            return f"[cyan]{status.upper()}[/cyan]"
