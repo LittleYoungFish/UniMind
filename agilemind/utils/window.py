@@ -5,12 +5,15 @@ CLI window display using rich to show live updates.
 import uuid
 from rich import box
 from rich.live import Live
+from rich.text import Text
+from rich.rule import Rule
 from rich.tree import Tree
 from rich.table import Table
 from rich.panel import Panel
 from datetime import datetime
+from rich.console import Group
 from rich.console import Console
-from typing import Any, Dict, Optional, Literal
+from typing import Any, Dict, Optional, Literal, List, Tuple
 
 
 class LogWindow:
@@ -21,6 +24,7 @@ class LogWindow:
         title: str = "AgileMind",
         refresh_per_second: float = 4,
         display_style: Literal["tree", "table"] = "tree",
+        log_height: int = 5,
     ):
         """
         Initialize the LogWindow.
@@ -29,6 +33,7 @@ class LogWindow:
             title (str): The title of the window
             refresh_per_second (float): How many times per second the display refreshes
             display_style (Literal["tree", "table"]): Display style for tasks - "tree" or "table"
+            log_height (int): Number of log lines to show in the log zone
         """
         self.title = title
         self.console = Console()
@@ -38,6 +43,9 @@ class LogWindow:
         self.refresh_per_second = refresh_per_second
         self.display_style = display_style
         self.hidden = False
+        # Log storage
+        self.logs: List[Tuple[datetime, str, str]] = []
+        self.log_height = log_height
 
     def __enter__(self):
         """Context manager entry point."""
@@ -174,19 +182,107 @@ class LogWindow:
         if self._live:
             self._live.update(self._generate_display())
 
+    def log(self, message: str, level: str = "INFO"):
+        """
+        Add a log message to the log zone.
+
+        Args:
+            message (str): The log message to add
+            level (str): Log level (INFO, WARNING, ERROR, DEBUG, etc.)
+        """
+        timestamp = datetime.now()
+
+        # Split multi-line messages and add each line as a separate log
+        for line in message.split("\n"):
+            if line.strip():
+                self.logs.append((timestamp, level, line))
+
+        # Maintain fixed size by removing oldest logs
+        if len(self.logs) > self.log_height:
+            self.logs = self.logs[-self.log_height :]
+
+        # Update the display if live
+        if self._live:
+            self._live.update(self._generate_display())
+
+    def clear_logs(self):
+        """Clear all logs from the log zone."""
+        self.logs = []
+        if self._live:
+            self._live.update(self._generate_display())
+
     def _generate_display(self) -> Panel:
         """Generate the display content."""
+        # Create the task display (tree or table)
         if self.display_style == "tree":
-            main_display = self._generate_task_tree()
+            tasks_display = self._generate_task_tree()
         else:
-            main_display = self._generate_task_table()
+            tasks_display = self._generate_task_table()
+
+        # Create the log zone
+        log_display = self._generate_log_zone()
+
+        # Combine displays using Group which can handle any renderable
+        combined_display = Group(tasks_display, Rule(style="dim"), log_display)
 
         return Panel(
-            main_display,
+            combined_display,
             title=f"[bold blue]{self.title}[/bold blue]",
             border_style="blue",
             box=box.ROUNDED,
         )
+
+    def _generate_log_zone(self) -> Text:
+        """Generate the log zone display."""
+        log_text = Text()
+
+        # If no logs, add placeholder
+        if not self.logs:
+            log_text.append("No logs", style="dim italic")
+            return log_text
+
+        # Add each log line with timestamp and level
+        for i, (timestamp, level, message) in enumerate(self.logs):
+            if i > 0:
+                log_text.append("\n")
+
+            # Format timestamp
+            time_str = timestamp.strftime("%H:%M:%S")
+            log_text.append(time_str, style="bright_black")
+
+            # Add level with appropriate color
+            log_text.append(" - ")
+            log_text.append(level, style=self._get_level_style(level))
+
+            # Add message
+            log_text.append(" - ")
+            log_text.append(message)
+
+        # Pad with empty lines to maintain fixed height
+        missing_lines = self.log_height - len(self.logs)
+        for _ in range(missing_lines):
+            log_text.append("\n")
+            log_text.append("", style="dim")
+
+        return log_text
+
+    def _get_level_style(self, level: str) -> str:
+        """Get the appropriate style for a log level."""
+        level = level.upper()
+        if level == "INFO":
+            return "bright_blue"
+        elif level == "WARNING":
+            return "yellow"
+        elif level == "ERROR":
+            return "red"
+        elif level == "DEBUG":
+            return "green"
+        elif level == "CRITICAL":
+            return "red bold"
+        elif level == "SUCCESS":
+            return "green bold"
+        else:
+            return "cyan"
 
     def _generate_task_tree(self) -> Tree:
         """Generate a hierarchical tree of tasks."""
