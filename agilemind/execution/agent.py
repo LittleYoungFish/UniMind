@@ -9,7 +9,7 @@ from context import Context
 from tool import execute_tool
 from dotenv import load_dotenv
 from .config import GenerationParams
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 from utils import retry, calculate_cost, clean_json_string
 
 
@@ -34,7 +34,7 @@ class Agent:
         next_agent: Optional["Agent"] = None,  # Added next_agent for forced handoff
         model: str = "gpt-4o-mini",
         save_path: Optional[str] = None,  # Path to save agent responses
-        generation_params: Optional[GenerationParams] = None,
+        generation_params: Optional[Union[GenerationParams, Dict]] = None,
         llm_base_url: Optional[str] = None,
         llm_api_key: Optional[str] = None,
     ):
@@ -64,6 +64,9 @@ class Agent:
         self.save_path = save_path
         self.rounds = []  # Track information by round
         self.generation_params = generation_params
+
+        if isinstance(generation_params, dict):
+            self.generation_params = GenerationParams(**generation_params)
 
         self.client = openai.OpenAI(
             api_key=llm_api_key or os.getenv("OPENAI_API_KEY"),
@@ -123,7 +126,9 @@ class Agent:
         Returns:
             Dict containing the agent's response and any actions taken
         """
-        return self._process_with_retry(context, input_text, max_iterations)
+        result = self._process_with_retry(context, input_text, max_iterations)
+        context.add_history(self.name, result.copy())
+        return result
 
     @retry(
         exceptions=[
@@ -173,8 +178,16 @@ class Agent:
                     "type": "function",
                     "function": {
                         "name": f"handoff_to_{agent.name}",
-                        "description": f"Hand off the conversation to the {agent.name} agent. The agent is specialized in {agent.description}.",
-                        "parameters": {"type": "object", "properties": {}},
+                        "description": f"Hand off to the {agent.name}, who is specialized in {agent.description}.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "instructions": {
+                                    "type": "string",
+                                    "description": "Instructions for that character to follow.",
+                                }
+                            },
+                        },
                     },
                 }
             )
@@ -263,6 +276,10 @@ class Agent:
                     # Check if this is a handoff
                     if tool_name.startswith("handoff_to_"):
                         target_agent_name = tool_name[len("handoff_to_") :]
+                        args = json.loads(tool_call.function.arguments)
+                        instruction = args.get("instructions", "")
+                        # TODO: Add support for handoff instructions
+
                         for agent in self.handoffs:
                             if agent.name == target_agent_name:
                                 current_round["handoff"] = agent.name
@@ -285,7 +302,7 @@ class Agent:
                         messages.append(
                             {
                                 "role": "assistant",
-                                "content": None,
+                                "content": response_message.content,
                                 "tool_calls": [
                                     {
                                         "id": tool_call.id,
@@ -323,7 +340,7 @@ class Agent:
                 break
 
             # Prepare for next round - tool results become the new input
-            next_input = f"Tool results: {json.dumps(current_round_tool_calls)}"
+            next_input = f"Tool results: {json.dumps(tool_result)}"
             current_round = {
                 "input": next_input,
                 "output": None,

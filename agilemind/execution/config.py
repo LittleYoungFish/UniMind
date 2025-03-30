@@ -17,8 +17,15 @@ class GenerationParams:
 
     top_p: Optional[float] = None
     max_tokens: Optional[int] = None
+    max_completion_tokens: Optional[int] = None
     tools: Optional[List[Dict]] = None
     temperature: Optional[float] = None
+
+    def __post_init__(self):
+        if self.max_tokens is not None:
+            self.max_completion_tokens = self.max_tokens
+        if self.max_completion_tokens is not None:
+            self.max_tokens = self.max_completion_tokens
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, excluding None values."""
