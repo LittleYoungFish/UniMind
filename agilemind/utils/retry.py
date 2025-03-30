@@ -41,14 +41,14 @@ def retry(
                 except tuple(exceptions) as e:
                     if attempt < max_attempts:
                         print(
-                            f"[Att. {attempt}/{max_attempts}. Retrying in {current_delay:.2f}s]\nError: {e}"
+                            f"Attempt {attempt}/{max_attempts}. Retrying in {current_delay:.2f}s\nError: {e}"
                         )
                         time.sleep(current_delay)
                         current_delay *= backoff_factor
                         attempt += 1
                     else:
                         print(
-                            f"[Att. {attempt}/{max_attempts}. Max retries exceeded. Exiting.]\nError: {e}"
+                            f"Attempt {attempt}/{max_attempts}. Max retries exceeded. Exiting.\nError: {e}"
                         )
                         time.sleep(1)
                         exit(1)
