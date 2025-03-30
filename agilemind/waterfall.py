@@ -7,7 +7,6 @@ import json
 import time
 import shutil
 import readchar
-from typing import Dict
 from pathlib import Path
 from context import Context
 from execution import Agent
@@ -19,6 +18,7 @@ from utils import format_cost
 from datetime import timedelta
 from tool import get_all_tools
 from utils import extract_json
+from typing import Dict, Optional
 from prompt import waterfall_prompt
 from checker import static_checkers
 from rich import print as rich_print
@@ -89,7 +89,7 @@ all_agents = [
 def run_workflow(
     demand: str,
     max_iterations: int = 5,
-    model: str = "gpt-4o-mini",
+    model: Optional[str] = None,
 ) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
@@ -103,8 +103,9 @@ def run_workflow(
         Dictionary containing the software development process
     """
     # Set the model for all agents
-    for agent in all_agents:
-        agent.set_model(model)
+    if model:
+        for agent in all_agents:
+            agent.set_model(model)
 
     output = os.path.abspath(".")
     context = Context(demand, output)

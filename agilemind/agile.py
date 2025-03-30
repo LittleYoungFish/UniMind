@@ -4,11 +4,11 @@ Development of software using agile methodology.
 
 import os
 import json
-import time
 import shutil
 import readchar
 from pathlib import Path
 from tool import get_tool
+from typing import Optional
 from execution import Agent
 from context import Context
 from rich.panel import Panel
@@ -29,6 +29,8 @@ prototype_builder = Agent(
     **extract_agent_llm_config("prototype", config),
 )
 
+all_agents = [prototype_builder]
+
 
 def build_prototype(
     context: Context,
@@ -48,14 +50,11 @@ def build_prototype(
     Returns:
         out: Dictionary containing the prototype development process
     """
-    window.update_status("Building prototype")
-    window.start_task("prototype", "Developing initial prototype")
-    window.log(f"Processing demand: {demand[:50]}...")
+    prototype_task = window.add_task("Developing prototype", status="running")
 
     prototype = prototype_builder.process(context, demand, max_iterations)
 
-    window.complete_task("prototype")
-    window.log("Initial prototype completed")
+    window.update_task(prototype_task, status="pending")
 
     client_satisfied = False
     revision_count = 0
@@ -70,8 +69,9 @@ def build_prototype(
                 title="Client Feedback",
             )
         )
-
         client_satisfied = readchar.readchar().lower() == "y"
+        console.clear()
+
         if not client_satisfied:
             revision_count += 1
             previous_prototype = prototype
@@ -88,26 +88,20 @@ def build_prototype(
                 feedback=feedback,
             )
 
-            window.start_task(
-                f"revision_{revision_count}",
-                f"Implementing revision #{revision_count}",
-            )
-            window.log(f"Feedback: {input_text[:50]}...")
-
+            window.update_task(prototype_task, status="running")
             prototype = prototype_builder.process(
                 context, feedback_info, max_iterations
             )
+            window.update_task(prototype_task, status="pending")
 
-            window.complete_task(f"revision_{revision_count}")
-            window.log(f"Completed revision #{revision_count}")
-
+    window.complete_task(prototype_task)
     return prototype
 
 
 def run_workflow(
     demand: str,
     max_iterations: int = 5,
-    model: str = "gpt-4o-mini",
+    model: Optional[str] = None,
 ) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
@@ -115,36 +109,39 @@ def run_workflow(
     Args:
         demand (str): User demand for the software
         max_iterations (int): Maximum number of iterations to run
-        model (str): String name of the model to use
+        model (str, Optional): String name of the model to use
 
     Returns:
         out: Dictionary containing the software development process
     """
+    if model:
+        for agent in all_agents:
+            agent.set_model(model)
+
     output_dir = os.path.abspath(os.getcwd())
     context = Context(demand, output_dir)
 
-    with LogWindow(title="AgileMind Development Process") as window:
-        window.update_status("Starting development process")
-        window.log(f"Using model: {model}")
-        window.log(f"Output directory: {output_dir}")
+    window = LogWindow(title="AgileMind Development")
+    window.open()
 
-        result = build_prototype(context, window, demand, max_iterations)
+    result = build_prototype(context, window, demand, max_iterations)
 
-        window.update_status("Development process completed")
-        time.sleep(1)
+    window.close()
 
     return result
 
 
-def dev(demand: str, output: str, model: str, max_iterations: int) -> dict:
+def dev(
+    demand: str, output: str, model: Optional[str] = None, max_iterations: int = 5
+) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
 
     Args:
         demand (str): User demand for the software
         output (str): Directory path to save the software
-        model (str): String name of the model to use
-        max_iterations (int): Maximum number of iterations to run
+        model (str, Optional): String name of the model to use
+        max_iterations (int, Optional): Maximum number of iterations to run
 
     Returns:
         out: Dictionary containing the software development process
@@ -162,6 +159,8 @@ def dev(demand: str, output: str, model: str, max_iterations: int) -> dict:
         )
 
         confirm = readchar.readchar().lower()
+        console.clear()
+
         if confirm != "y":
             return {"status": "cancelled"}
 
