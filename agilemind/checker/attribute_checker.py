@@ -306,6 +306,11 @@ class AttributeChecker(AbsChecker):
                 hasattr(base, attr_name) for base in obj_type.__mro__
             )
 
+        # Special case for modules
+        if inspect.ismodule(obj_type):
+            # For modules like os.path, directly check if attribute exists
+            return hasattr(obj_type, attr_name)
+
         return hasattr(obj_type, attr_name)
 
     def check_attributes(self):
@@ -374,21 +379,25 @@ class AttributeChecker(AbsChecker):
             if obj is not None:
                 if hasattr(obj, attr_node.attr):
                     attr_value = getattr(obj, attr_node.attr)
-                    if callable(attr_value) and not inspect.isclass(attr_value):
-                        # For methods, return the expected return type if possible
-                        # For now, just return None as we can't easily determine return types
-                        return None
-                    return (
-                        attr_value if inspect.isclass(attr_value) else type(attr_value)
-                    )
+                    # Handle case with module.attribute (like os.path)
+                    if attr_value is not None:
+                        return (
+                            attr_value
+                            if inspect.isclass(attr_value)
+                            or inspect.ismodule(attr_value)
+                            else type(attr_value)
+                        )
         elif isinstance(attr_node.value, ast.Attribute):
             # Recursive case for nested attributes
             parent = self._resolve_attribute_type(attr_node.value)
             if parent is not None and hasattr(parent, attr_node.attr):
                 attr_value = getattr(parent, attr_node.attr)
-                if callable(attr_value) and not inspect.isclass(attr_value):
-                    return None
-                return attr_value if inspect.isclass(attr_value) else type(attr_value)
+                # Return the actual module or class for further attribute resolution
+                return (
+                    attr_value
+                    if inspect.isclass(attr_value) or inspect.ismodule(attr_value)
+                    else type(attr_value)
+                )
         elif isinstance(attr_node.value, ast.Call):
             # Handle method call return values like obj.method().attr
             return self._resolve_call_return_type(attr_node.value)
