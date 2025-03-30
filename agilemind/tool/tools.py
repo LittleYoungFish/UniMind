@@ -32,16 +32,25 @@ class Tools:
             }
 
         overwritten = True if os.path.isfile(path) else False
-        if path not in context.code.structure:
-            context.code.structure[path] = content
-        context.code.uptodated[path] = content
+
+        if (
+            not path.endswith(".json")
+            and not path.endswith(".md")
+            and not path.endswith(".txt")
+        ):
+            if path not in context.code.structure:
+                context.code.structure[path] = content
+            context.code.uptodated[path] = content
 
         try:
             # Ensure directory exists
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
             with open(path, "w") as f:
-                f.write(content)
+                if path.endswith(".json"):
+                    json.dump(json.loads(content), f, indent=4)
+                else:
+                    f.write(content)
             return {
                 "success": True,
                 "message": (
