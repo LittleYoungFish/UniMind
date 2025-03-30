@@ -113,7 +113,7 @@ class Agent:
 
     def process(
         self, context: Context, input_text: str, max_iterations: int = None
-    ) -> Dict:
+    ) -> List[Dict]:
         """
         Process the input using OpenAI API and return the agent's response.
         This method is decorated with retry to handle transient failures.

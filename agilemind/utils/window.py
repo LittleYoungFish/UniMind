@@ -3,6 +3,8 @@ CLI window display using rich to show live updates.
 """
 
 import uuid
+import time
+import threading
 from rich import box
 from rich.live import Live
 from rich.text import Text
@@ -14,6 +16,8 @@ from datetime import datetime
 from rich.console import Group
 from rich.console import Console
 from typing import Any, Dict, Optional, Literal, List, Tuple, Callable
+
+SPINNER = ["|", "/", "-", "\\"]
 
 
 def intercept_print(log_window: "LogWindow", level: str = "INFO") -> Callable:
@@ -45,10 +49,14 @@ def intercept_print(log_window: "LogWindow", level: str = "INFO") -> Callable:
         message = sep.join(str(arg) for arg in args)
 
         log_level = level
-        if "error" in message.lower():
-            log_level = "ERROR"
+        if "debug" in message.lower():
+            log_level = "DEBUG"
         elif "warning" in message.lower():
             log_level = "WARNING"
+        elif "error" in message.lower():
+            log_level = "ERROR"
+        elif "critical" in message.lower():
+            log_level = "CRITICAL"
 
         # Log the message
         log_window.log(message, level=log_level)
@@ -70,12 +78,13 @@ class LogWindow:
     def __init__(
         self,
         title: str = "AgileMind",
-        refresh_per_second: float = 4,
+        refresh_per_second: float = 5,
         display_style: Literal["tree", "table"] = "tree",
         log_height: int = 5,
         window_height: Optional[int] = None,
         intercept_print: bool = True,
         print_log_level: str = "INFO",
+        auto_refresh: bool = True,
     ):
         """
         Initialize the LogWindow.
@@ -88,6 +97,7 @@ class LogWindow:
             window_height (Optional[int]): Total height of the window. If None, uses full terminal height
             intercept_print (bool): Whether to automatically intercept print function calls
             print_log_level (str): Log level to use for intercepted print messages
+            auto_refresh (bool): Whether to automatically refresh the window at regular intervals
         """
         self.title = title
         self.console = Console()
@@ -102,6 +112,12 @@ class LogWindow:
         self.log_height = log_height
         self.window_height = window_height
         self.full_screen = window_height is None
+
+        # Auto-refresh settings
+        self.auto_refresh = auto_refresh
+        self.auto_refresh_interval = 1.0 / refresh_per_second
+        self._auto_refresh_thread = None
+        self._stop_refresh_thread = threading.Event()
 
         # Store the print restore function
         self._restore_print = None
@@ -138,10 +154,18 @@ class LogWindow:
         )
         self._live.start()
         self.hidden = False
+
+        # Start auto-refresh thread if enabled
+        if self.auto_refresh:
+            self._start_auto_refresh()
+
         return self
 
     def close(self):
         """Close the log window."""
+        # Stop the auto-refresh thread if it's running
+        self._stop_auto_refresh()
+
         if self._live:
             self._live.stop()
             self._live = None
@@ -154,6 +178,9 @@ class LogWindow:
 
     def hide(self):
         """Temporarily hide the log window without closing it."""
+        # Stop auto-refresh while hidden
+        self._stop_auto_refresh()
+
         if self._live and not self.hidden:
             # Save current state before stopping
             self._saved_display = self._generate_display()
@@ -179,6 +206,10 @@ class LogWindow:
             )
             self._live.start()
             self.hidden = False
+
+            # Restart auto-refresh if enabled
+            if self.auto_refresh:
+                self._start_auto_refresh()
 
     def toggle_visibility(self):
         """Toggle the visibility of the log window."""
@@ -299,6 +330,58 @@ class LogWindow:
             A function to restore the original print function
         """
         return intercept_print(self, level)
+
+    def _start_auto_refresh(self):
+        """Start a background thread for auto-refreshing the display."""
+        if (
+            self._auto_refresh_thread is not None
+            and self._auto_refresh_thread.is_alive()
+        ):
+            return  # Thread already running
+
+        self._stop_refresh_thread.clear()
+        self._auto_refresh_thread = threading.Thread(
+            target=self._auto_refresh_loop, daemon=True
+        )
+        self._auto_refresh_thread.start()
+
+    def _stop_auto_refresh(self):
+        """Stop the auto-refresh background thread."""
+        if (
+            self._auto_refresh_thread is not None
+            and self._auto_refresh_thread.is_alive()
+        ):
+            self._stop_refresh_thread.set()
+            self._auto_refresh_thread.join(timeout=1.0)
+            self._auto_refresh_thread = None
+
+    def _auto_refresh_loop(self):
+        """Background thread loop to periodically update the display."""
+        while not self._stop_refresh_thread.is_set():
+            if self._live and not self.hidden:
+                try:
+                    self._live.update(self._generate_display())
+                except Exception:
+                    # Prevent crashes from display updates
+                    pass
+            time.sleep(self.auto_refresh_interval)
+
+    def set_auto_refresh(self, enabled: bool, interval: Optional[float] = None):
+        """
+        Enable or disable automatic display refreshing.
+
+        Args:
+            enabled (bool): Whether to enable auto-refresh
+            interval (Optional[float]): Refresh interval in seconds. If None, uses existing interval.
+        """
+        self.auto_refresh = enabled
+        if interval is not None:
+            self.auto_refresh_interval = interval
+
+        if enabled:
+            self._start_auto_refresh()
+        else:
+            self._stop_auto_refresh()
 
     def _generate_display(self) -> Panel:
         """Generate the display content."""
@@ -580,12 +663,13 @@ class LogWindow:
     def _get_status_style(self, status: str) -> str:
         """Get styled status text based on status value."""
         if status == "completed":
-            return "[green]COMPLETED[/green]"
+            return "[green]\N{WHITE HEAVY CHECK MARK} COMPLETED[/green]"
         elif status == "pending":
-            return "[yellow]PENDING[/yellow]"
+            return "[yellow]\N{HOURGLASS} PENDING[/yellow]"
         elif status == "failed":
-            return "[red]FAILED[/red]"
+            return "[red]\N{CROSS MARK} FAILED[/red]"
         elif status == "running":
-            return "[blue]RUNNING[/blue]"
+            current_spinner_char = SPINNER[int(time.time() * 4) % 4]
+            return f"[blue]{current_spinner_char} RUNNING[/blue]"
         else:
-            return f"[cyan]{status.upper()}[/cyan]"
+            return f"[cyan]\N{INFORMATION SOURCE} {status.upper()}[/cyan]"
