@@ -4,11 +4,11 @@ Development of software using agile methodology.
 
 import os
 import json
+import time
 import shutil
 import readchar
 from pathlib import Path
 from tool import get_tool
-from typing import Optional
 from execution import Agent
 from context import Context
 from rich.panel import Panel
@@ -16,8 +16,15 @@ from rich.align import Align
 from prompt import agile_prompt
 from rich.console import Console
 from rich import print as rprint
-from utils.window import LogWindow
-from utils import load_config, extract_agent_llm_config
+from typing import Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from utils import (
+    LogWindow,
+    load_config,
+    create_file_tree,
+    extract_agent_llm_config,
+    convert_json_to_markdown,
+)
 
 config = load_config()
 console = Console()
@@ -29,8 +36,22 @@ prototype_builder = Agent(
     tools=[get_tool("write_file")],
     **extract_agent_llm_config("prototype", config),
 )
+architect = Agent(
+    name="architect",
+    description="Design architecture of the software",
+    instructions=agile_prompt.ARCHITECT,
+    tools=[get_tool("write_file")],
+    **extract_agent_llm_config("architecture", config),
+)
+developer = Agent(
+    name="developer",
+    description="Implement code for the software",
+    instructions=agile_prompt.DEVELOPER,
+    tools=[get_tool("write_file")],
+    **extract_agent_llm_config("programming", config),
+)
 
-all_agents = [prototype_builder]
+all_agents = [prototype_builder, architect, developer]
 
 
 def build_prototype(
@@ -38,7 +59,7 @@ def build_prototype(
     window: LogWindow,
     demand: str,
     max_iterations: int = 5,
-) -> dict:
+) -> tuple["str", "str"]:
     """
     Build a prototype of the software.
 
@@ -49,11 +70,18 @@ def build_prototype(
         max_iterations (int): Maximum number of iterations to run
 
     Returns:
-        out: Dictionary containing the prototype development process
+        out: Tuple of feedback and prototype
     """
+    window.log("Developing prototype of the software...")
+
     prototype_task = window.add_task("Developing prototype", status="running")
 
-    prototype = prototype_builder.process(context, demand, max_iterations)
+    prototype_builder.process(context, demand, max_iterations)
+
+    if not os.path.isfile("docs/prototype.html"):
+        raise FileNotFoundError("Prototype file not found")
+    with open("docs/prototype.html", "r") as f:
+        prototype = f.read()
 
     window.update_task(prototype_task, status="pending")
 
@@ -92,13 +120,16 @@ def build_prototype(
 
             window.show()
             window.update_task(prototype_task, status="running")
-            prototype = prototype_builder.process(
-                context, feedback_info, max_iterations
-            )
+            prototype_builder.process(context, feedback_info, max_iterations)
             window.update_task(prototype_task, status="pending")
 
+            with open("docs/prototype.html", "r") as f:
+                prototype = f.read()
+
+    window.show()
     window.complete_task(prototype_task)
-    return prototype
+
+    return feedback, prototype
 
 
 def build_architecture(
@@ -108,7 +139,7 @@ def build_architecture(
     feedback: str,
     prototype: str,
     max_iterations: int = 5,
-) -> dict:
+) -> tuple[List, str]:
     """
     Build a prototype of the software.
 
@@ -121,8 +152,88 @@ def build_architecture(
         max_iterations (int): Maximum number of iterations to run
 
     Returns:
-        out: Dictionary containing the prototype development process
+        out: Tuple of code file list and architecture information
     """
+    window.log("Designing architecture of the software...")
+
+    architecture_task = window.add_task("Developing architecture", status="running")
+    demand_info = agile_prompt.FEEDBACK_TEMPLATE.format(
+        raw_demand=demand, feedback=feedback, prototype=prototype
+    )
+
+    architect.process(context, demand_info, max_iterations)
+
+    if not os.path.isfile("logs/architecture.json"):
+        raise FileNotFoundError("Architecture file not found")
+    with open("logs/architecture.json", "r") as f:
+        json_info: Dict = json.load(f)
+
+    md_info = json_info.copy()
+    code_file_list_md = create_file_tree(json_info["code_file_list"])
+    md_info["code_file_list"] = code_file_list_md
+    architecture_md = convert_json_to_markdown(
+        "introduction",
+        "code_file_list",
+        "class_structure",
+        "call_flow",
+        data=md_info,
+        title="Software System Design",
+        code_languages={
+            "code_file_list": "plaintext",
+            "class_structure": "mermaid",
+            "call_flow": "mermaid",
+        },
+    )
+    with open("docs/architecture.md", "w") as f:
+        f.write(architecture_md)
+
+    window.complete_task(architecture_task)
+    return json_info.get("code_file_list", []), architecture_md
+
+
+def implement_code(
+    context: Context,
+    window: LogWindow,
+    code_file_list: List[str],
+    architecture: str,
+    max_iterations: int = 5,
+) -> None:
+    """
+    Implement the code for the software.
+
+    Args:
+        context (Context): Context object containing the software development process
+        window (LogWindow): CLI window for displaying progress
+        code_file_list (List[str]): List of code files to implement
+        architecture (str): Architecture information of the software
+        max_iterations (int): Maximum number of iterations to run
+
+    Returns:
+        None
+    """
+    window.log("Implementing code for the software...")
+
+    code_task = window.add_task("Implementing code", status="running")
+
+    with ThreadPoolExecutor() as executor:
+        code_tasks = [
+            executor.submit(
+                developer.process,
+                context,
+                agile_prompt.DEVELOPING_TEMPLATE.format(
+                    architecture=architecture, file_path=file
+                ),
+                max_iterations,
+            )
+            for file in code_file_list
+        ]
+        for task in as_completed(code_tasks):
+            task.result()
+
+    window.log("Code implementation completed.")
+    window.complete_task(code_task)
+
+    return
 
 
 def run_workflow(
@@ -151,11 +262,19 @@ def run_workflow(
     window = LogWindow(title="AgileMind Development")
     window.open()
 
-    result = build_prototype(context, window, demand, max_iterations)
+    window.log("Starting the software development process...")
 
+    feedback, prototype = build_prototype(context, window, demand, max_iterations)
+    file_list, architecture = build_architecture(
+        context, window, demand, feedback, prototype, max_iterations
+    )
+
+    implement_code(context, window, file_list, architecture, max_iterations)
+
+    window.log("Software development process completed. Exiting...")
     window.close()
 
-    return result
+    return context.dump()
 
 
 def dev(
