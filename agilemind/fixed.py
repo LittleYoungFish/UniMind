@@ -2,9 +2,9 @@ import os
 import json
 from typing import Dict
 from pathlib import Path
-from tool import get_all_tools
-from prompt import fixed_prompt
-from execution import Agent, Runner
+from agilemind.tool import get_all_tools
+from agilemind.prompt import fixed_prompt
+from agilemind.execution import Agent, Runner
 
 quality_assurance = Agent(
     "quality_assurance",

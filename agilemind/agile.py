@@ -7,17 +7,17 @@ import json
 import shutil
 import readchar
 from pathlib import Path
-from tool import get_tool
-from execution import Agent
-from context import Context
 from rich.panel import Panel
 from rich.align import Align
-from prompt import agile_prompt
 from rich.console import Console
 from rich import print as rprint
+from agilemind.tool import get_tool
+from agilemind.execution import Agent
+from agilemind.context import Context
 from typing import Dict, List, Optional
+from agilemind.prompt import agile_prompt
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from utils import (
+from agilemind.utils import (
     LogWindow,
     load_config,
     create_file_tree,

@@ -1,6 +1,6 @@
-from execution import GenerationParams
 from typing import Any, Dict, Optional
 from dataclasses import dataclass, field
+from agilemind.execution import GenerationParams
 
 
 @dataclass

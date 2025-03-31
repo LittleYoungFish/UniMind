@@ -4,14 +4,14 @@ It provides methods to interact with the OpenAI chat API and handle query execut
 """
 
 import json
-from task import Task
 from openai import OpenAI
-from context import Context
 from typing import Optional
+from agilemind.task import Task
 from dataclasses import dataclass
 from .config import ExecutorConfig
-from prompt import DEFAULT_SYSTEM_MESSAGE
-from tool import get_all_tools, execute_tool
+from agilemind.context import Context
+from agilemind.prompt import DEFAULT_SYSTEM_MESSAGE
+from agilemind.tool import get_all_tools, execute_tool
 from openai.types.chat.chat_completion import ChatCompletion, ChatCompletionMessage
 
 

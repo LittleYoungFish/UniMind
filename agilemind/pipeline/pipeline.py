@@ -2,9 +2,9 @@
 Pipeline module for orchestrating the flow of data through a series of agents.
 """
 
-from stage import Stage
-from context import Context
 from typing import List, Optional
+from agilemind.stage import Stage
+from agilemind.context import Context
 from dataclasses import dataclass, field
 
 

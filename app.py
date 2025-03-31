@@ -1,4 +1,4 @@
-from agilemind import entry
+from agilemind import develop
 
 if __name__ == "__main__":
-    entry()
+    develop()

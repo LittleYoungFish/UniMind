@@ -2,8 +2,8 @@ import os
 import json
 import shutil
 import subprocess
-from context import Context
 from .tool_decorator import tool
+from agilemind.context import Context
 from typing import Any, Dict, Optional
 
 

@@ -1,5 +1,5 @@
 from .definition import Stage
-from task import demand_analysis, architectural_design
+from agilemind.task import demand_analysis, architectural_design
 
 
 design_stage = Stage(

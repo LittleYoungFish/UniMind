@@ -1,7 +1,7 @@
 import inspect
 from .tools import Tools
-from context import Context
 from typing import Any, Dict, List
+from agilemind.context import Context
 
 
 def get_tool(tool_name: str) -> Dict[str, Any]:

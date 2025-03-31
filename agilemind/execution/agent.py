@@ -5,12 +5,12 @@ Agent module for creating agents that can process inputs, use tools, and hand of
 import os
 import json
 import openai
-from context import Context
-from tool import execute_tool
 from dotenv import load_dotenv
 from .config import GenerationParams
+from agilemind.context import Context
+from agilemind.tool import execute_tool
 from typing import List, Optional, Dict, Union
-from utils import retry, calculate_cost, clean_json_string
+from agilemind.utils import retry, calculate_cost, clean_json_string
 
 
 load_dotenv()

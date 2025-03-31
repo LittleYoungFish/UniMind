@@ -2,9 +2,9 @@
 Stage module for organizing tasks within a pipeline.
 """
 
-from task import Task
-from context import Context
-from execution import Executor
+from agilemind.task import Task
+from agilemind.context import Context
+from agilemind.execution import Executor
 from dataclasses import dataclass, field
 
 

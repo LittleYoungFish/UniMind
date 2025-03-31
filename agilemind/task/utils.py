@@ -1,7 +1,7 @@
 import os
 import pathlib
-from task import Task
-from context import Context
+from .definition import Task
+from agilemind.context import Context
 
 
 def save_result_to_file(task: Task, context: Context) -> None:

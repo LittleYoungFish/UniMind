@@ -1,7 +1,3 @@
-import sys
+from .main import entry as develop
 
-sys.path.append("agilemind")
-
-from .main import entry
-
-__all__ = ["entry"]
+__all__ = ["develop"]

@@ -8,21 +8,19 @@ import time
 import shutil
 import readchar
 from pathlib import Path
-from context import Context
-from execution import Agent
 from rich.panel import Panel
 from rich.align import Align
 from rich.table import Table
 from rich.box import ROUNDED
-from utils import format_cost
 from datetime import timedelta
-from tool import get_all_tools
-from utils import extract_json
 from typing import Dict, Optional
-from prompt import waterfall_prompt
-from checker import static_checkers
 from rich import print as rich_print
-from execution import deterministic_generation
+from agilemind.context import Context
+from agilemind.tool import get_all_tools
+from agilemind.prompt import waterfall_prompt
+from agilemind.checker import static_checkers
+from agilemind.utils import extract_json, format_cost
+from agilemind.execution import Agent, deterministic_generation
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
