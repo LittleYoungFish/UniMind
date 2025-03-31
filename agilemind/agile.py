@@ -4,7 +4,6 @@ Development of software using agile methodology.
 
 import os
 import json
-import time
 import shutil
 import readchar
 from pathlib import Path
@@ -79,6 +78,7 @@ def build_prototype(
     prototype_builder.process(context, demand, max_iterations)
 
     if not os.path.isfile("docs/prototype.html"):
+        print("Critical: Prototype file not found")
         raise FileNotFoundError("Prototype file not found")
     with open("docs/prototype.html", "r") as f:
         prototype = f.read()
@@ -164,6 +164,7 @@ def build_architecture(
     architect.process(context, demand_info, max_iterations)
 
     if not os.path.isfile("logs/architecture.json"):
+        print("Critical: Architecture file not found")
         raise FileNotFoundError("Architecture file not found")
     with open("logs/architecture.json", "r") as f:
         json_info: Dict = json.load(f)

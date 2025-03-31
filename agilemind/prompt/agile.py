@@ -49,8 +49,8 @@ Follow these steps:
 3. Output in JSON format with path **"logs/architecture.json"**, containing the following field:
     - introduction: a brief introduction to the software.
     - code_file_list: the file **path** (e.g. "src/core/logic.py" for a python app) **list** of the software repository. There should be an entry point file located in the root directory (e.g. "main.py" for a Python app). Valid JSON list.
-    - class_structure: the class structure, valid **Mermaid** class diagram with all the classes, their properties and methods.
-    - call_flow: the call flow of the software, valid **Mermaid** sequence diagram. Use method names and parameters in the diagram.
+    - class_structure: the class structure, valid **Mermaid** class diagram with all the classes, their properties and methods, especially the parameters of constructors.
+    - call_flow: the call flow of the software, valid **Mermaid** sequence diagram. Use method names and all parameters in the diagram.
 
 Note that:
 - "code_file_list" should only list the code files. Do not list other files such as documents, assets, etc.

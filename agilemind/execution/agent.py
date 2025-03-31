@@ -200,6 +200,7 @@ class Agent:
             round_number += 1
 
             try:
+                print(f"Debug: {self.name} processing round {round_number}...")
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -210,7 +211,9 @@ class Agent:
                         else {}
                     ),
                 )
-            except Exception:
+                print("Debug: Response received.")
+            except Exception as e:
+                print(f"Error: {e}")
                 raise
 
             response_message = response.choices[0].message
