@@ -1,3 +1,7 @@
+# ------------------------------------------------------------
+# Adjust API key, base URL, and model for each stage if needed
+# ------------------------------------------------------------
+
 default:
   llm:
     api_base_url: ${OPENAI_BASE_URL}
