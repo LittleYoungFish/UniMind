@@ -2,6 +2,7 @@
 Utility functions for converting JSON data to markdown.
 """
 
+import re
 import json
 from typing import Dict, Any, Union, List
 
@@ -54,6 +55,11 @@ def convert(
             if field in code_languages:
                 # Use specified language for code block
                 language = code_languages[field]
+
+                # Clean "``` LANGUAGE" and "```" from value
+                value = re.sub(r"```[^\n]*\n", "", value)
+                value = re.sub(r"```", "", value)
+
                 markdown += f"```{language}\n{value}\n```\n\n"
             elif isinstance(value, (list, dict)):
                 # For complex types, use JSON formatting

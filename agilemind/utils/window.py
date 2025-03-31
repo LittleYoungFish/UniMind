@@ -663,13 +663,13 @@ class LogWindow:
     def _get_status_style(self, status: str) -> str:
         """Get styled status text based on status value."""
         if status == "completed":
-            return "[green]\N{WHITE HEAVY CHECK MARK} COMPLETED[/green]"
+            return "\N{WHITE HEAVY CHECK MARK} [green]COMPLETED[/green]"
         elif status == "pending":
-            return "[yellow]\N{HOURGLASS} PENDING[/yellow]"
+            return "\N{HOURGLASS} [yellow]PENDING[/yellow]"
         elif status == "failed":
-            return "[red]\N{CROSS MARK} FAILED[/red]"
+            return "\N{CROSS MARK} [red]FAILED[/red]"
         elif status == "running":
             current_spinner_char = SPINNER[int(time.time() * 4) % 4]
             return f"[blue]{current_spinner_char} RUNNING[/blue]"
         else:
-            return f"[cyan]\N{INFORMATION SOURCE} {status.upper()}[/cyan]"
+            return "\N{INFORMATION SOURCE}" + f"[cyan]{status.upper()}[/cyan]"
