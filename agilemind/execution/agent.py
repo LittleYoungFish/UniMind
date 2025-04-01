@@ -5,7 +5,10 @@ Agent module for creating agents that can process inputs, use tools, and hand of
 import os
 import json
 import openai
+from rich.align import Align
+from rich.panel import Panel
 from dotenv import load_dotenv
+from rich import print as rprint
 from .config import GenerationParams
 from agilemind.context import Context
 from agilemind.tool import execute_tool
@@ -68,8 +71,24 @@ class Agent:
         if isinstance(generation_params, dict):
             self.generation_params = GenerationParams(**generation_params)
 
+        api_key = llm_api_key or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            rprint(
+                Panel(
+                    Align.center(
+                        "No OpenAI API key found. "
+                        "Please set OPENAI_API_KEY in your environment "
+                        "or use a .env/config.yaml file. "
+                        "Please refer to the README for more information."
+                    ),
+                    title="[bold red]Error[/bold red]",
+                    border_style="red",
+                )
+            )
+            exit(1)
+
         self.client = openai.OpenAI(
-            api_key=llm_api_key or os.getenv("OPENAI_API_KEY"),
+            api_key=api_key,
             base_url=llm_base_url or os.getenv("OPENAI_API_BASE_URL"),
         )
 

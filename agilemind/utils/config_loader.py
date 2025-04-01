@@ -22,10 +22,12 @@ def load_config(path: str = "config.yaml") -> Dict[str, Any]:
     load_dotenv()
 
     if not os.path.isabs(path):
-        project_root = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        path = os.path.join(project_root, path)
+        cwd = os.getcwd()
+        path = os.path.join(cwd, path)
+
+    if not os.path.isfile(path):
+        print(f"Config file not found")
+        return {}
 
     # Load the YAML file
     with open(path, "r") as file:
