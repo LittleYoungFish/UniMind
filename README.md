@@ -14,6 +14,18 @@ Agile Mind is an AI-powered development platform that builds software repositori
 
 ## Getting Started
 
+### 1. From PyPI
+
+```bash
+pip install AgileMind
+
+# Set environment variables as described below
+
+agilemind "Create a 2048 game with UI" -o output
+```
+
+### 2. From source
+
 ```bash
 # Clone the repository
 git clone https://github.com/wnrock/AgileMind.git
