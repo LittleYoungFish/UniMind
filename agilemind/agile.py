@@ -293,8 +293,8 @@ def dev(
     Returns:
         out: Dictionary containing the software development process
     """
-    # If output dir exists, ask user whether to confirm purging it first
-    if Path(output).exists():
+    # If output dir is not empty
+    if os.path.isdir(output) and os.listdir(output):
         rprint(
             Panel(
                 Align.center(
@@ -311,8 +311,12 @@ def dev(
         if confirm != "y":
             return {"status": "cancelled"}
 
-        # Purge the output directory
-        shutil.rmtree(output)
+        # Remove all files and subdirectories in the output directory
+        for item in Path(output).glob("*"):
+            if item.is_file():
+                item.unlink()
+            else:
+                shutil.rmtree(item)
 
     Path(output).mkdir(parents=True, exist_ok=True)
     Path(output, "docs").mkdir(parents=True, exist_ok=True)
