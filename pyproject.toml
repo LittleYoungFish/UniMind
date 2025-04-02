@@ -17,10 +17,12 @@ dependencies = [
     "annotated-types",
     "anyio",
     "astroid",
+    "beautifulsoup4",
     "certifi",
     "charset-normalizer",
     "dill",
     "distro",
+    "esprima",
     "h11",
     "httpcore",
     "httpx",
@@ -45,11 +47,14 @@ dependencies = [
     "requests",
     "rich",
     "sniffio",
+    "soupsieve",
     "tiktoken",
+    "tinycss2",
     "tomlkit",
     "tqdm",
     "typing_extensions",
     "urllib3",
+    "webencodings",
 ]
 
 [tool.hatch.version]
