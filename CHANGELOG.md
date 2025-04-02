@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.0.2] - 2025-04-02
+
+### Added
+
+- Added docker support for running the script in a container.
+
+### Changed
+
+- Changed output directory cleanup logic, now it will not remove the directory itself.
 
 ### Fixed
 
