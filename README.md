@@ -2,7 +2,7 @@
 
 ## Overview
 
-Agile Mind is an AI-powered development platform that builds software repositories from natural language descriptions. It uses a multi-agent architecture to automate the software development process, from requirements gathering to code generation and documentation.
+Agile Mind is an AI-powered development platform that builds software repositories from natural language descriptions. It uses a LLM-based multi-agent architecture to automate the software development process, from requirements gathering to code generation and documentation.
 
 ## Features
 
@@ -20,11 +20,23 @@ Agile Mind is an AI-powered development platform that builds software repositori
 pip install AgileMind
 
 # Set environment variables as described below
+export OPENAI_API_KEY="<Your_API_key>"
 
 agilemind "Create a 2048 game with UI" -o output
 ```
 
-### 2. From source
+### 2. Docker
+
+```bash
+docker run -it                              \
+    -e OPENAI_API_KEY="<Your_API_key>"      \
+    -v <Your_output_dir>:/agilemind/output  \
+    ghcr.io/wnrock/agilemind:latest         \
+    "Create a 2048 game with UI"            \
+    -o output
+```
+
+### 3. From source
 
 ```bash
 # Clone the repository
@@ -35,8 +47,9 @@ cd AgileMind
 pip install -r requirements.txt
 
 # Prepare environment variables
-cp .env.template .env # Then replace the placeholder values with actual credentials
-# Or set environment variables manually: OPENAI_API_KEY, OPENAI_BASE_URL, etc.
+# Set environment variables manually: OPENAI_API_KEY, OPENAI_BASE_URL, etc., or
+cp .env.template .env
+# Then replace the placeholder values with actual credentials
 
 # Start developing
 python app.py "Create a 2048 game with UI" -o output
