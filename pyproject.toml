@@ -1,6 +1,6 @@
 [project]
 name = "AgileMind"
-version = "0.0.1"
+dynamic = ["version"]
 authors = [
   { name="WnRock" },
 ]
@@ -51,6 +51,9 @@ dependencies = [
     "typing_extensions",
     "urllib3",
 ]
+
+[tool.hatch.version]
+path = "agilemind/__init__.py"
 
 [project.scripts]
 agilemind = "agilemind.main:entry"
