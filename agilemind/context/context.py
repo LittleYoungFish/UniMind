@@ -8,24 +8,6 @@ from .token_usage import TokenUsage
 from typing import Any, Dict, List, Optional
 
 
-class ContextCode:
-    """
-    Context class that manages the code structure in the context.
-    """
-
-    structure: Dict[str, str] = {}
-    uptodated: Dict[str, str] = {}
-
-    def dump(self) -> Dict[str, str]:
-        """
-        Dump the code structure into a dictionary.
-
-        Returns:
-            Dictionary containing the code structure
-        """
-        return {"structure": self.structure, "uptodated": self.uptodated}
-
-
 class Context:
     """
     Context class that manages the state and data flow throughout pipeline execution.
@@ -34,11 +16,11 @@ class Context:
     root_dir: str
     raw_demand: str
     document: Dict[str, str] = {}
-    code: ContextCode = ContextCode()
     history: List[Dict[str, Any]] = []
     time: float = 0.0
     token_usage: TokenUsage
     cost: Cost
+    used_tools: List[Dict] = []
 
     def __init__(self, raw_demand: str, root_dir: Optional[str] = None):
         """
@@ -99,6 +81,29 @@ class Context:
                 "step": step,
                 "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "data": data,
+            }
+        )
+
+    def add_used_tool(
+        self, tool_name: str, params: Dict[str, Any], result: Dict[str, Any]
+    ) -> None:
+        """
+        Add a used tool to the context.
+
+        Args:
+            tool_name: Name of the tool used
+            params: Parameters used for the tool
+            result: Result of the tool execution
+
+        Returns:
+            None
+        """
+        self.used_tools.append(
+            {
+                "tool_name": tool_name,
+                "params": params,
+                "result": result,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
         )
 
@@ -166,8 +171,8 @@ class Context:
             "root_dir": self.root_dir,
             "raw_demand": self.raw_demand,
             "document": self.document,
-            "code": self.code.dump(),
             "history": self.history,
+            "used_tools": self.used_tools,
             "token_usage": self.token_usage.to_dict(),
             "cost": self.cost.to_dict(),
         }

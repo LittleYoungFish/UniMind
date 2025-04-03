@@ -2,19 +2,31 @@ import os
 import json
 import shutil
 import subprocess
+from pathlib import Path
 from .tool_decorator import tool
-from agilemind.context import Context
 from typing import Any, Dict, Optional
+from agilemind.utils import extract_framework
 
 
 class Tools:
+    @staticmethod
+    @tool("work_done", description="Mark the task as done")
+    def work_done() -> Dict[str, Any]:
+        """
+        Mark the task as done
+
+        Returns:
+            Dict containing success status and message
+        """
+        return {"success": True, "message": "Task marked as done"}
+
     @staticmethod
     @tool(
         "write_file",
         description="Write content to the file at the specified path. If the file already exists, it will be overwritten. Otherwise, a new file (and any necessary directories) will be created.",
         group="file_system",
     )
-    def write_file(context: Context, path: str, content: str) -> Dict[str, Any]:
+    def write_file(path: str, content: str) -> Dict[str, Any]:
         """
         Write content to a file. If the file already exists, it will be overwritten. Otherwise, a new file will be created.
 
@@ -25,22 +37,15 @@ class Tools:
         Returns:
             Dict containing success status and message
         """
-        if ".." in path or path.startswith("/"):
+        cwd = Path(os.getcwd()).resolve()
+        file_path = Path(path).resolve()
+        if not file_path.is_relative_to(cwd):
             return {
                 "success": False,
-                "message": "Cannot write files outside the current directory",
+                "message": f"Cannot write to files outside the current directory: {path}",
             }
 
         overwritten = True if os.path.isfile(path) else False
-
-        if (
-            not path.endswith(".json")
-            and not path.endswith(".md")
-            and not path.endswith(".txt")
-        ):
-            if path not in context.code.structure:
-                context.code.structure[path] = content
-            context.code.uptodated[path] = content
 
         try:
             # Ensure directory exists
@@ -68,7 +73,7 @@ class Tools:
         description="Read the content of a file",
         group="file_system",
     )
-    def read_file(context: Context, path: str) -> Dict[str, Any]:
+    def read_file(path: str) -> Dict[str, Any]:
         """
         Read and return the content of a file.
 
@@ -78,10 +83,12 @@ class Tools:
         Returns:
             Dict containing success status, message, and file content
         """
-        if ".." in path or path.startswith("/"):
+        cwd = Path(os.getcwd()).resolve()
+        file_path = Path(path).resolve()
+        if not file_path.is_relative_to(cwd):
             return {
                 "success": False,
-                "message": "Cannot read files outside the current directory",
+                "message": f"Cannot read files outside the current directory: {path}",
             }
 
         try:
@@ -105,9 +112,7 @@ class Tools:
         description="Execute a shell command",
         confirmation_required=True,
     )
-    def execute_command(
-        context: Context, command: str, cwd: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def execute_command(command: str, cwd: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute a shell command. Related path **MUST be relative path.**
 
@@ -139,7 +144,7 @@ class Tools:
         description="List the structure of the project",
         group="file_system",
     )
-    def list_directory(context: Context) -> Dict[str, Any]:
+    def list_directory() -> Dict[str, Any]:
         """
         List the structure of the project.
 
@@ -147,7 +152,12 @@ class Tools:
             Dict containing success status, message, and project structure
         """
         try:
-            items = list(context.code.uptodated.keys())
+            cwd = os.getcwd()
+            items = []
+            for root, dirs, files in os.walk(cwd):
+                for name in dirs + files:
+                    items.append(os.path.relpath(os.path.join(root, name)))
+
             return {
                 "success": True,
                 "message": "Project structure listed",
@@ -164,7 +174,7 @@ class Tools:
         "delete_file",
         description="Delete a file or directory",
     )
-    def delete_file(context: Context, path: str) -> Dict[str, Any]:
+    def delete_file(path: str) -> Dict[str, Any]:
         """
         Delete a file or directory.
 
@@ -174,10 +184,12 @@ class Tools:
         Returns:
             Dict containing success status and message
         """
-        if ".." in path or path.startswith("/"):
+        cwd = Path(os.getcwd()).resolve()
+        file_path = Path(path).resolve()
+        if not file_path.is_relative_to(cwd):
             return {
                 "success": False,
-                "message": "Cannot delete files outside the current directory",
+                "message": f"Cannot delete files outside the current directory: {path}",
             }
 
         try:
@@ -200,7 +212,7 @@ class Tools:
         group="development",
     )
     def add_to_requirements(
-        context: Context, language: str, package_name: str, version: str = None
+        language: str, package_name: str, version: str = None
     ) -> Dict[str, Any]:
         """
         Add a package to the requirements file based on the language
@@ -214,6 +226,18 @@ class Tools:
             Dict containing success status and message
         """
         if language.lower() == "python":
+            with open("requirements.txt", "r") as f:
+                requirements = [
+                    line.split("==")[0].split("<=")[0].split(">=")[0].strip()
+                    for line in f.readlines()
+                ]
+
+            if package_name in requirements:
+                return {
+                    "success": True,
+                    "message": f"{package_name} already exists in requirements.txt",
+                }
+
             with open("requirements.txt", "a") as f:
                 if version:
                     f.write(f"{package_name}=={version}\n")
@@ -245,31 +269,45 @@ class Tools:
 
     @staticmethod
     @tool(
-        "get_project_structure",
-        description="Get the code structure of a module or all modules",
+        "get_code_structure",
+        description="Get the code structure of one or more files",
         group="development",
     )
-    def get_code_structure(context: Context, module: str = None) -> Dict[str, Any]:
+    def get_code_structure(*files: str) -> Dict[str, Any]:
         """
         Get the code structure of a module or all modules
 
         Args:
-            module: The name of the module to get the structure of (optional)
+            files: The path of the file(s) to get the code structure of
 
         Returns:
             Dict containing success status and message
         """
         try:
-            code_structure = {
-                k: v
-                for k, v in context.code.structure.items()
-                if module is None or module in k
-            }
+            results = {}
+            cwd = Path(os.getcwd()).resolve()
+
+            for file in files:
+                # If the file is not a subdirectory or subfile of cwd, return False
+                file_path = Path(file).resolve()
+                if not file_path.is_relative_to(cwd):
+                    return {
+                        "success": False,
+                        "message": f"Cannot get code structure of files outside the current directory: {file}",
+                    }
+
+                if not os.path.isfile(file_path):
+                    return {
+                        "success": False,
+                        "message": f"Path not found or not a file: {file}",
+                    }
+
+                results[file] = extract_framework(file_path)
 
             return {
                 "success": True,
-                "message": f"Code structure of {module or 'all modules'} retrieved",
-                "code_structure": code_structure,
+                "message": f"Code structure retrieved successfully",
+                "code_structure": results,
             }
         except Exception as e:
             return {
