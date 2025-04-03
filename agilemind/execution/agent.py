@@ -34,12 +34,13 @@ class Agent:
         instructions: str,
         tools: Optional[List[Dict[str, str]]] = None,
         handoffs: Optional[List["Agent"]] = None,
-        next_agent: Optional["Agent"] = None,  # Added next_agent for forced handoff
+        next_agent: Optional["Agent"] = None,
         model: str = "gpt-4o-mini",
-        save_path: Optional[str] = None,  # Path to save agent responses
+        save_path: Optional[str] = None,
         generation_params: Optional[Union[GenerationParams, Dict]] = None,
         llm_base_url: Optional[str] = None,
         llm_api_key: Optional[str] = None,
+        multi_turn: bool = False,
     ):
         """
         Initialize an Agent instance.
@@ -56,17 +57,19 @@ class Agent:
             generation_params: Optional parameters for the model generation
             llm_base_url: Optional base URL for the OpenAI API
             llm_api_key: Optional API key for the OpenAI API
+            multi_turn: If True, agent can process multiple rounds; if False, agent processes only one round
         """
         self.name = name
         self.description = description
         self.instructions = instructions
         self.tools = tools or []
         self.handoffs = handoffs or []
-        self.next_agent = next_agent  # Store the next agent for forced handoff
+        self.next_agent = next_agent
         self.model = model
         self.save_path = save_path
-        self.rounds = []  # Track information by round
+        self.rounds = []
         self.generation_params = generation_params
+        self.multi_turn = multi_turn
 
         if isinstance(generation_params, dict):
             self.generation_params = GenerationParams(**generation_params)
@@ -354,10 +357,12 @@ class Agent:
 
             # Break the loop if no tool calls or handoff is requested
             # or if we've reached the maximum number of iterations
+            # or if multi_turn is False (meaning we only want one round)
             if (
                 not current_round_tool_calls
                 or handoff_requested
                 or (max_iterations is not None and round_number >= max_iterations)
+                or not self.multi_turn  # Break after one round if multi_turn is False
             ):
                 break
 
