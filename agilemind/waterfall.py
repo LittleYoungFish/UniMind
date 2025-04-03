@@ -122,9 +122,9 @@ def run_workflow(
             completed=1,
             description="[bold green]Demand analysis completed",
         )
-        context.set_document("demand_analysis", demand_analysis[-1]["output"])
+        context.set_document("demand_analysis", demand_analysis["output"])
         context.add_history("demand_analysis", demand_analysis)
-        demand_report = extract_json(demand_analysis[-1]["output"])
+        demand_report = extract_json(demand_analysis["output"])
 
         # Architecture step
         arch_task = progress.add_task("Building architecture...", total=1)
@@ -132,7 +132,7 @@ def run_workflow(
             context, json.dumps(demand_analysis), max_iterations
         )
         context.add_history("architecture", architecture)
-        architecture = extract_json(architecture[-1]["output"])
+        architecture = extract_json(architecture["output"])
         progress.update(
             arch_task, completed=1, description="[bold green]Architecture created"
         )
@@ -152,7 +152,8 @@ def run_workflow(
         )
 
         # Implement the logic of every file in parallel
-        files = list(context.code.uptodated.keys())
+        # TODO: Implement a better way to get the files
+        files = list()
         logic_task = progress.add_task("Implementing code logic...", total=len(files))
         completed_count = 0
         files_subtasks = []
@@ -173,7 +174,8 @@ def run_workflow(
             files_subtasks.append(file_logic_subtask)
 
             # Prepare the input file data in XML format
-            file_data = context.code.uptodated[file]
+            # TODO: Implement a better way to get the file data
+            file_data = ""
             xml_data = f"<path>{file}</path>\n<code>{file_data}</code>"
 
             logic = logic_programmer.process(context, xml_data, max_iterations)
@@ -247,10 +249,8 @@ def run_workflow(
 
         # Execute syntax checks in parallel
         with ThreadPoolExecutor() as executor:
-            future_to_file = {
-                executor.submit(check_syntax, file): file
-                for file in context.code.uptodated.keys()
-            }
+            # TODO: Implement a better way to get the files
+            future_to_file = {executor.submit(check_syntax, file): file for file in []}
             for future in as_completed(future_to_file):
                 _, _ = future.result()
                 completed_count += 1
@@ -279,7 +279,7 @@ def run_workflow(
             completed=1,
             description=f"[bold green]Quality assurance round {qa_round} completed",
         )
-        qa_report = extract_json(qa_report[-1]["output"])
+        qa_report = extract_json(qa_report["output"])
 
         # Fix the bugs if any
         if qa_report.get("is_buggy", False):
@@ -296,7 +296,8 @@ def run_workflow(
     time_str = str(timedelta(seconds=int(total_time)))
     software_name = architecture["name"]
     module_count = max(len(modules), 1)
-    file_count = len(context.code.uptodated.keys())
+    # TODO: Implement a better way to get the files
+    file_count = len([])
     lines_of_code = sum(len(f.split("\n")) for f in context.code.uptodated.values())
     doc_count = len(context.document)
     doc_lines = sum(len(doc.split("\n")) for doc in context.document.values())

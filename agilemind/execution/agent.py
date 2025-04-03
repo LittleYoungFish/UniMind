@@ -7,16 +7,12 @@ import json
 import openai
 from rich.align import Align
 from rich.panel import Panel
-from dotenv import load_dotenv
 from rich import print as rprint
 from .config import GenerationParams
 from agilemind.context import Context
 from agilemind.tool import execute_tool
 from typing import List, Optional, Dict, Union
 from agilemind.utils import retry, calculate_cost, clean_json_string
-
-
-load_dotenv()
 
 
 class Agent:
@@ -70,6 +66,7 @@ class Agent:
         self.rounds = []
         self.generation_params = generation_params
         self.multi_turn = multi_turn
+        self.memory = []
 
         if isinstance(generation_params, dict):
             self.generation_params = GenerationParams(**generation_params)
@@ -96,6 +93,10 @@ class Agent:
         )
 
     def __repr__(self) -> str:
+        """Return string representation of the Agent."""
+        return f"Agent(name='{self.name}')"
+
+    def __str__(self):
         """Return string representation of the Agent."""
         return f"Agent(name='{self.name}')"
 
@@ -134,8 +135,12 @@ class Agent:
             f.write(response_content + "\n\n")
 
     def process(
-        self, context: Context, input_text: str, max_iterations: int = None
-    ) -> List[Dict]:
+        self,
+        context: Context,
+        input_text: str,
+        max_iterations: int = None,
+        clear_memory: bool = True,
+    ) -> Dict:
         """
         Process the input using OpenAI API and return the agent's response.
         This method is decorated with retry to handle transient failures.
@@ -144,11 +149,19 @@ class Agent:
             context: The context object
             input_text: The text input to process
             max_iterations: Maximum number of interaction rounds (None means no limit)
+            clear_memory: If True, clears the memory before processing; if False, appends to existing memory
 
         Returns:
-            Dict containing the agent's response and any actions taken
+            Dict: containing:
+                - input: Initial input text
+                - output: Model response message of final round
+                - usage: Dict with token usage and cost information
+                - reason: Reason for ending the conversation
+                - handoff: Dict with agent object and instructions if handoff occurred
         """
-        result = self._process_with_retry(context, input_text, max_iterations)
+        result = self._process_with_retry(
+            context, input_text, max_iterations, clear_memory
+        )
         context.add_history(self.name, result.copy())
         return result
 
@@ -163,8 +176,12 @@ class Agent:
         ],
     )
     def _process_with_retry(
-        self, context: Context, input_text: str, max_iterations: int = None
-    ) -> List[Dict]:
+        self,
+        context: Context,
+        input_text: str,
+        max_iterations: int = None,
+        clear_memory: bool = True,
+    ) -> Dict:
         """
         Internal method to process input with retry capabilities.
         This method is decorated with retry to handle transient failures.
@@ -173,13 +190,19 @@ class Agent:
             context: The context object
             input_text: The text input to process
             max_iterations: Maximum number of interaction rounds (None means no limit)
+            clear_memory: If True, clears the memory before processing; if False, appends to existing memory
 
         Returns:
-            List of dictionaries containing information for each round of interaction
+            Dict: containing:
+                - input: Initial input text
+                - output: Model response message of final round
+                - usage: Dict with token usage and cost information
+                - reason: Reason for ending the conversation
+                - handoff: Dict with agent object and instructions if handoff occurred
         """
-        messages = self._prepare_messages(input_text)
+        messages = self._prepare_messages(input_text, clear_memory)
 
-        # Initialize rounds tracking
+        # Initialize rounds tracking for internal use
         self.rounds = []
         current_round = {
             "input": input_text,
@@ -187,13 +210,24 @@ class Agent:
             "tool_calls": None,
             "handoff": None,
             "token_usage": None,
-            "cost": None,  # Add cost field to track costs per round
+            "cost": None,
+            "reason": None,
         }
 
+        # Initialize tracking for the final result
+        total_token_usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        total_cost = {"prompt_cost": 0, "completion_cost": 0, "total_cost": 0}
+        final_output = None
+        final_reason = None
+        handoff_target = None
+        handoff_instructions = None
+
         # Add handoff agents as tools
-        tools_with_handoffs = (
-            self.tools.copy()
-        )  # Create a copy to avoid modifying the original
+        tools_with_handoffs = self.tools.copy()
         for agent in self.handoffs:
             tools_with_handoffs.append(
                 {
@@ -239,6 +273,7 @@ class Agent:
                 raise
 
             response_message = response.choices[0].message
+            final_output = response_message.content
 
             # Update current round with output
             current_round["output"] = response_message.content
@@ -248,7 +283,12 @@ class Agent:
                 prompt_tokens = response.usage.prompt_tokens
                 completion_tokens = response.usage.completion_tokens
 
-                # Record token usage
+                # Update total token usage
+                total_token_usage["prompt_tokens"] += prompt_tokens
+                total_token_usage["completion_tokens"] += completion_tokens
+                total_token_usage["total_tokens"] += response.usage.total_tokens
+
+                # Record token usage for current round
                 current_round["token_usage"] = {
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
@@ -262,7 +302,12 @@ class Agent:
                     completion_tokens=completion_tokens,
                 )
 
-                # Record cost information
+                # Update total cost
+                total_cost["prompt_cost"] += cost_info["prompt_cost"]
+                total_cost["completion_cost"] += cost_info["completion_cost"]
+                total_cost["total_cost"] += cost_info["total_cost"]
+
+                # Record cost information for current round
                 current_round["cost"] = cost_info
 
                 # Update token usage in context with detailed information
@@ -293,6 +338,7 @@ class Agent:
             # Check for handoff or tool calls
             handoff_requested = False
             current_round_tool_calls = []
+            work_done_called = False
 
             if hasattr(response_message, "tool_calls") and response_message.tool_calls:
                 for tool_call in response_message.tool_calls:
@@ -302,16 +348,23 @@ class Agent:
                     if tool_name.startswith("handoff_to_"):
                         target_agent_name = tool_name[len("handoff_to_") :]
                         args = json.loads(tool_call.function.arguments)
-                        instruction = args.get("instructions", "")
-                        # TODO: Add support for handoff instructions
+                        handoff_instructions = args.get("instructions", "")
 
                         for agent in self.handoffs:
                             if agent.name == target_agent_name:
                                 current_round["handoff"] = agent.name
+                                current_round["reason"] = "handoff"
+                                handoff_target = agent
+                                final_reason = "handoff"
                                 handoff_requested = True
                                 break
                         if handoff_requested:
                             break
+                    elif tool_name == "work_done":
+                        # Mark that work_done was called
+                        work_done_called = True
+                        current_round["reason"] = "work_done"
+                        final_reason = "work_done"
                     else:
                         # Execute the tool
                         args = json.loads(tool_call.function.arguments)
@@ -348,6 +401,12 @@ class Agent:
                             }
                         )
 
+                        # Update memory with the new messages
+                        if messages[-2] not in self.memory:  # Avoid duplicates
+                            self.memory.append(messages[-2])
+                        if messages[-1] not in self.memory:  # Avoid duplicates
+                            self.memory.append(messages[-1])
+
             # Update current round with tool calls if any
             if current_round_tool_calls:
                 current_round["tool_calls"] = current_round_tool_calls
@@ -355,15 +414,31 @@ class Agent:
             # Add the current round to rounds list
             self.rounds.append(current_round.copy())
 
+            # Check if max iterations will be reached in the next round
+            if max_iterations is not None and round_number >= max_iterations:
+                # If this was the last round due to max_iterations, set the reason
+                if not current_round["reason"]:
+                    current_round["reason"] = "round_limit"
+                    final_reason = "round_limit"
+                    # Update the last entry in rounds list
+                    self.rounds[-1]["reason"] = "round_limit"
+
             # Break the loop if no tool calls or handoff is requested
             # or if we've reached the maximum number of iterations
             # or if multi_turn is False (meaning we only want one round)
             if (
                 not current_round_tool_calls
                 or handoff_requested
+                or work_done_called
                 or (max_iterations is not None and round_number >= max_iterations)
                 or not self.multi_turn  # Break after one round if multi_turn is False
             ):
+                # If we're breaking without a specific reason, mark it as completed
+                if not current_round["reason"]:
+                    current_round["reason"] = "completed"
+                    final_reason = "completed"
+                    # Update the last entry in rounds list
+                    self.rounds[-1]["reason"] = "completed"
                 break
 
             # Prepare for next round - tool results become the new input
@@ -374,6 +449,8 @@ class Agent:
                 "tool_calls": None,
                 "handoff": None,
                 "token_usage": None,
+                "cost": None,
+                "reason": None,
             }
 
         # Check if there's a forced handoff via next_agent, which takes precedence over
@@ -381,12 +458,61 @@ class Agent:
         if self.next_agent:
             # Update the last round with the forced handoff
             self.rounds[-1]["handoff"] = self.next_agent.name
+            handoff_target = self.next_agent
+            if self.rounds[-1]["reason"] != "work_done":
+                self.rounds[-1]["reason"] = "handoff"
+                final_reason = "handoff"
 
-        return self.rounds
+        # Construct the result dictionary
+        result = {
+            "input": input_text,
+            "output": final_output,
+            "usage": {
+                "token": total_token_usage,
+                "cost": total_cost,
+            },
+            "reason": final_reason,
+            "handoff": (
+                {
+                    "to": handoff_target or None,
+                    "instruction": handoff_instructions or "",
+                }
+                if handoff_target
+                else None
+            ),
+        }
 
-    def _prepare_messages(self, input_text: str) -> List[Dict]:
-        """Prepare the message for the API call."""
-        return [
-            {"role": "system", "content": self.instructions},
-            {"role": "user", "content": input_text},
-        ]
+        return result
+
+    def _prepare_messages(
+        self, input_text: str, clear_memory: bool = True
+    ) -> List[Dict]:
+        """
+        Prepare the message for the API call.
+
+        Args:
+            input_text: The text input to process
+            clear_memory: If True, clears the memory before preparing messages;
+                          if False, includes memory in the conversation
+        """
+        # Clear memory if requested
+        if clear_memory:
+            self.memory = []
+
+        # Base messages with system instructions
+        messages = [{"role": "system", "content": self.instructions}]
+
+        # Add memory messages if they exist
+        if self.memory:
+            messages.extend(self.memory)
+
+        # Add the new user message
+        user_message = {"role": "user", "content": input_text}
+        messages.append(user_message)
+
+        # Store this message in memory if not clearing
+        if not clear_memory:
+            if user_message not in self.memory:
+                self.memory.append(user_message)
+
+        return messages
