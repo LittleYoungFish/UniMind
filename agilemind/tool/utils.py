@@ -1,4 +1,5 @@
 import inspect
+import readchar
 from .tools import Tools
 from typing import Any, Dict, List
 from agilemind.context import Context
@@ -92,10 +93,8 @@ def execute_tool(
                 # Format arguments as a readable string
                 args_str = "\n".join(f"{k}={repr(v)}" for k, v in arguments.items())
 
-                # Ask for confirmation
-                confirmation = input(
-                    f"Do you want to execute {tool_name}? (y/n)\n{args_str}"
-                )
+                print(f"Do you want to execute {tool_name}? (y/n)")
+                confirmation = readchar.readchar()
 
                 # Check if user confirmed
                 if confirmation.lower() not in ["y", "yes"]:
@@ -104,7 +103,14 @@ def execute_tool(
                         "message": "Tool execution cancelled by user",
                     }
 
-            # Execute the tool if confirmed or if no confirmation required
-            return method(context, **arguments)
+            result = method(**arguments)
+
+            context.add_used_tool(
+                tool_name=tool_name,
+                params=arguments,
+                result=result,
+            )
+
+            return result
 
     return {"success": False, "message": f"Unknown tool: {tool_name}"}
