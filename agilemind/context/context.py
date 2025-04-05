@@ -76,11 +76,23 @@ class Context:
         Returns:
             None
         """
+
+        # Convert the unserializable data to a string recursively
+        def convert_data(data):
+            if isinstance(data, dict):
+                return {k: convert_data(v) for k, v in data.items()}
+            elif isinstance(data, list):
+                return [convert_data(item) for item in data]
+            elif isinstance(data, (int, float, str, bool)):
+                return data
+            else:
+                return str(data)
+
         self.history.append(
             {
                 "step": step,
                 "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "data": data,
+                "data": convert_data(data),
             }
         )
 
