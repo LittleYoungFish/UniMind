@@ -2,7 +2,7 @@ import os
 import sys
 import ast
 import importlib
-from .interface import AbsChecker
+from ..interface import AbsChecker
 from typing import Dict, List, Tuple
 
 

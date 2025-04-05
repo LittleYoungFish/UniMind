@@ -1,6 +1,6 @@
 import re
 import ast
-from .interface import AbsChecker
+from ..interface import AbsChecker
 from typing import Dict, List, Union, Tuple, Optional
 
 

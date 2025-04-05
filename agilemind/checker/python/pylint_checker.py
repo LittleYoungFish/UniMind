@@ -1,7 +1,7 @@
 import re
 import tempfile
 import subprocess
-from .interface import AbsChecker
+from ..interface import AbsChecker
 from typing import Any, List, Dict
 
 

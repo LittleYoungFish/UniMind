@@ -2,7 +2,7 @@ import re
 import ast
 import inspect
 import importlib
-from .interface import AbsChecker
+from ..interface import AbsChecker
 from typing import List, Optional, Dict, Any, Set
 
 
