@@ -276,12 +276,12 @@ class Tools:
         description="Get the code structure of one or more files",
         group="development",
     )
-    def get_code_structure(*files: str) -> Dict[str, Any]:
+    def get_code_structure(files: list[str]) -> Dict[str, Any]:
         """
         Get the code structure of a module or all modules
 
         Args:
-            files: The path of the file(s) to get the code structure of
+            files: List of file paths to get the code structure for
 
         Returns:
             Dict containing success status and message

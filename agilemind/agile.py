@@ -276,6 +276,15 @@ def build_architecture(
         if not os.path.isfile("logs/architecture.json"):
             window.log("Architecture file not found", "CRITICAL")
             continue
+
+        with open("logs/architecture.json", "r") as f:
+            architecture_json = f.read()
+        json_info: Dict = extract_json(architecture_json)
+
+        if not json_info.get("code_file_list"):
+            window.log("No code files found in the architecture", "CRITICAL")
+            continue
+
         break
 
     if not os.path.isfile("logs/architecture.json"):
@@ -671,6 +680,9 @@ def run_workflow(
         )
         implement_code(context, window, file_list, architecture, max_iterations)
         qa_check(context, window, file_list, architecture, max_iterations)
+
+        with open("logs/development_record.json", "w") as f:
+            f.write(json.dumps(context.dump(), indent=4))
     except Exception as e:
         show_error_view(window, e)
 
@@ -728,9 +740,6 @@ def dev(
 
     try:
         result = run_workflow(demand, model=model, max_iterations=max_iterations)
-
-        with open("logs/development_record.json", "w") as f:
-            f.write(json.dumps(result, indent=4))
     finally:
         os.chdir(initial_cwd)  # Restore original working directory
 

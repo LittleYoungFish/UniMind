@@ -135,6 +135,7 @@ Output:
 
 Note that:
 - Make sure all the files in the repository are checked and able to pass the static code analysis.
+- If you need to check multiple files, you should call "run_static_analysis" or other tools multiple times in a single round of conversation.
 """
 
 DEBUGGING = """
