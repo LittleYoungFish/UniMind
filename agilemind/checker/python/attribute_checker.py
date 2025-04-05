@@ -458,12 +458,12 @@ class AttributeChecker(AbsChecker):
             return self.check_attributes()
         return self.errors
 
-    def check(self, code: str) -> List[Dict[str, str]]:
+    def check(self, file_path: str) -> List[Dict[str, str]]:
         """
         Check the given code for invalid attribute accesses.
 
         Args:
-            code (str): The code to check
+            file_path (str): Path to the Python file to check
 
         Returns:
             out (List[Dict[str, Any]]): A list of dictionaries containing information about issues found.
@@ -473,6 +473,9 @@ class AttributeChecker(AbsChecker):
                                  - 'problematic_code': code snippet that caused the issue
                                  - 'message': description of the issue
         """
+        with open(file_path, "r") as file:
+            code = file.read()
+
         self.errors = self.check_attribute_access(code)
         pattern = r"^Line (\d+), Col (\d+): (.*?)$"
         matches = [re.match(pattern, err) for err in self.errors]

@@ -162,7 +162,19 @@ class PylintChecker(AbsChecker):
     def name(self) -> str:
         return "PyLint Checker"
 
-    def check(self, code: str) -> List[Dict[str, str]]:
+    def check(self, file_path: str) -> List[Dict[str, str]]:
+        """
+        Check the Python code in the given file using PyLint.
+
+        Args:
+            file_path (str): Path to the Python file to check
+
+        Returns:
+            out (List[Dict[str, str]]): List of dictionaries containing line number, column, problematic code, and error message
+        """
+        with open(file_path, "r") as f:
+            code = f.read()
+
         errors = check_code_with_pylint(code)
         return [
             {

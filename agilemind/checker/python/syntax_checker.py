@@ -85,7 +85,19 @@ class SyntaxChecker(AbsChecker):
     def name(self) -> str:
         return "Syntax Checker"
 
-    def check(self, code: str) -> List[Dict[str, str]]:
+    def check(self, file_path: str) -> List[Dict[str, str]]:
+        """
+        Check the syntax of the Python code in the given file.
+
+        Args:
+            file_path (str): Path to the Python file to check
+
+        Returns:
+            out (List[Dict[str, str]]): A list of dictionaries containing line number, column, problematic code, and error message
+        """
+        with open(file_path, "r") as f:
+            code = f.read()
+
         error = check_syntax(code)
         if error["valid"]:
             return []

@@ -5,7 +5,8 @@ import subprocess
 from pathlib import Path
 from .tool_decorator import tool
 from typing import Any, Dict, Optional
-from agilemind.utils import extract_framework
+from agilemind.utils import extract_framework, extract_json
+from agilemind.checker import python_checkers, web_checkers
 
 
 class Tools:
@@ -53,9 +54,11 @@ class Tools:
 
             with open(path, "w") as f:
                 if path.endswith(".json"):
-                    json.dump(json.loads(content), f, indent=4)
+                    json_content = extract_json(content)
+                    f.write(json.dumps(json_content, indent=4))
                 else:
                     f.write(content)
+                f.flush()
             return {
                 "success": True,
                 "message": (
@@ -313,4 +316,54 @@ class Tools:
             return {
                 "success": False,
                 "message": f"Failed to get code structure: {str(e)}",
+            }
+
+    @staticmethod
+    @tool(
+        "run_static_analysis",
+        description="Run static analysis on file",
+        group="development",
+    )
+    def run_static_analysis(file_path: str) -> Dict[str, Any]:
+        """
+        Run static analysis on a file
+
+        Args:
+            file_path: The path of the file to run static analysis on.
+
+        Returns:
+            Dict containing success status and message
+        """
+        try:
+            cwd = Path(os.getcwd()).resolve()
+            file_path = Path(file_path).resolve()
+            if not file_path.is_relative_to(cwd):
+                return {
+                    "success": False,
+                    "message": f"Cannot run static analysis on files outside the current directory: {file_path}",
+                }
+
+            if not os.path.isfile(file_path):
+                return {
+                    "success": False,
+                    "message": f"Path not found or not a file: {file_path}",
+                }
+
+            suffix = Path(file_path).suffix
+            if suffix == ".py":
+                results = python_checkers.run(file_path)
+            elif suffix in [".html", ".css", ".js"]:
+                results = web_checkers.run(file_path)
+            else:
+                results = [{"message": "Unsupported file type for static analysis."}]
+
+            return {
+                "success": True,
+                "message": f"Static analysis completed",
+                "analysis_results": results,
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to run static analysis: {str(e)}",
             }

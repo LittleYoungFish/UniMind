@@ -1,3 +1,3 @@
-from .static_checking import static_checkers
+from .static_checking import python_checkers, web_checkers
 
-__all__ = ["static_checkers"]
+__all__ = ["python_checkers", "web_checkers"]

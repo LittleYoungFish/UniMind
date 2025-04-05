@@ -119,7 +119,19 @@ class ImportChecker(AbsChecker):
     def name(self) -> str:
         return "Import Checker"
 
-    def check(self, code: str) -> List[Dict[str, str]]:
+    def check(self, file_path: str) -> List[Dict[str, str]]:
+        """
+        Check the imports in the given file.
+
+        Args:
+            file_path (str): Path to the Python file to check
+
+        Returns:
+            List of dictionaries containing line number, column, problematic code, and error message
+        """
+        with open(file_path, "r") as f:
+            code = f.read()
+
         errors = check_imports(code)
         return [
             {"line": lineno, "column": 0, "problematic_code": stmt, "message": error}

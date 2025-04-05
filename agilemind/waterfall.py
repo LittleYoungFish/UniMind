@@ -18,7 +18,7 @@ from rich import print as rich_print
 from agilemind.context import Context
 from agilemind.tool import get_all_tools
 from agilemind.prompt import waterfall_prompt
-from agilemind.checker import static_checkers
+from agilemind.checker import python_checkers
 from agilemind.utils import extract_json, format_cost
 from agilemind.execution import Agent, deterministic_generation
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -232,7 +232,7 @@ def run_workflow(
             syntax_subtasks.append(file_syntax_subtask)
 
             error_info = f"in {file}: \n\n"
-            static_checkers_result = static_checkers.run(context.code.uptodated[file])
+            static_checkers_result = python_checkers.run(file)
 
             if static_checkers_result:
                 error_info += json.dumps(static_checkers_result)

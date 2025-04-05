@@ -18,12 +18,12 @@ class AbsChecker(ABC):
         pass
 
     @abstractmethod
-    def check(self, code: str) -> List[Dict[str, str]]:
+    def check(self, file_path: str) -> List[Dict[str, str]]:
         """
         Check the given code and return a list of issues found.
 
         Args:
-            code (str): The code to check
+            file_path (str): Path to the code file to check
 
         Returns:
             out (List[Dict[str, Any]]): A list of dictionaries containing information about issues found.

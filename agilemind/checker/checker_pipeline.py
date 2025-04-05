@@ -24,12 +24,12 @@ class CheckerPipeline:
         self._checkers.extend(checkers)
         return self
 
-    def run(self, code: str) -> List[Dict[str, Any]]:
+    def run(self, file_path: str) -> List[Dict[str, Any]]:
         """
         Run checkers in the pipeline on the given code until one returns errors.
 
         Args:
-            code (str): The code to check
+            file_path (str): Path to the Python file to check
 
         Returns:
             out (List[Dict[str, Any]]): Results from the first checker that finds issues,
@@ -37,7 +37,7 @@ class CheckerPipeline:
         """
         for checker in self._checkers:
             try:
-                checker_results = checker.check(code)
+                checker_results = checker.check(file_path)
                 if checker_results:  # If the checker found any issues
                     return checker_results
             except Exception as e:
