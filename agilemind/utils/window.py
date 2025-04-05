@@ -133,7 +133,7 @@ class LogWindow:
         if self.full_screen:
             _, height = self.console.size
             self.window_height = height
-            self.task_zone_height = self.window_height - self.log_height - 4
+            self.task_zone_height = max(1, self.window_height - self.log_height - 4)
 
     def __enter__(self):
         """Context manager entry point."""
@@ -388,24 +388,21 @@ class LogWindow:
         self._calculate_heights()
 
         if self.display_style == "tree":
-            max_items = max(1, self.task_zone_height - 3)
+            max_items = max(1, self.task_zone_height - 1)
             tasks_display = self._generate_task_tree(max_items=max_items)
-            tasks_size = len(tasks_display.children) + 3
-            tasks_display = Group(Text(""), tasks_display, Text(""))
+            tasks_size = tasks_display.count + 1
         else:
             max_rows = max(1, self.task_zone_height - 4)
             tasks_display = self._generate_task_table(max_rows=max_rows)
             tasks_size = tasks_display.row_count + 4
 
-        # If task size is smaller than the window height, pad with empty lines
-        missing_lines = self.task_zone_height - tasks_size
-        tasks_display = (
-            Group(tasks_display, Text("\n" * missing_lines, style="dim"))
-            if missing_lines > 0
-            else tasks_display
-        )
+        # Calculate task zone padding needed
+        task_zone_padding = max(0, self.task_zone_height - tasks_size)
+        if task_zone_padding > 0:
+            # Add padding to the task zone to maintain its allocated height
+            tasks_display = Group(tasks_display, Text("\n" * task_zone_padding))
 
-        # Create the log zone
+        # Create the log zone with guaranteed minimum height
         log_display = self._generate_log_zone()
 
         # Combine displays using Group which can handle any renderable
@@ -534,6 +531,7 @@ class LogWindow:
                 tree.add("[dim]...[/dim]")
                 count += 1
 
+        tree.count = count
         return tree
 
     def _add_child_tasks(
