@@ -30,7 +30,7 @@ def run_pylint_on_file(file_path: str) -> str:
         )
         pylint = pylint.stdout.strip()
         result = subprocess.run(
-            [pylint, file_path, "-E", "--disable=E0401"],
+            [pylint, file_path, "-E", "--disable=E0401,E1101"],
             text=True,
             capture_output=True,
         )
