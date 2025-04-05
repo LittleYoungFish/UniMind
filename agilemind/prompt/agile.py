@@ -72,6 +72,7 @@ Follow these steps:
 
 Note that:
 - "code_file_list" should only list the code files. Do not list other files such as documents, assets, etc.
+- All file names must follow Python naming conventions: use digits, letters or underscores `_`, and must not start with numbers.
 - The diagrams should be clear and concise enough, so that the developers can understand the software architecture quickly and correctly.
 - The methods in all diagrams should show its name and **parameters**, e.g. "method_name(param1: type1, param2: type2): return_type".
 - The name of class, method, and parameters should follow the language's naming convention, e.g. PEP8 for Python.
