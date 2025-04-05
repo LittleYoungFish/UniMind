@@ -6,30 +6,30 @@ default:
   llm:
     api_base_url: ${OPENAI_BASE_URL}
     api_key: ${OPENAI_API_KEY}
-    model: "gpt-4o"
+    model: "o3-mini"
 
 workflow:
   prototype:
     # api_base_url: ${OPENAI_BASE_URL}
     # api_key: ${OPENAI_API_KEY}
-    # model: "gpt-4o"
+    # model: "o3-mini"
 
   architecture:
     # api_base_url: ${OPENAI_BASE_URL}
     # api_key: ${OPENAI_API_KEY}
-    # model: "gpt-4o"
+    # model: "o3-mini"
   
   programming:
     # api_base_url: ${OPENAI_BASE_URL}
     # api_key: ${OPENAI_API_KEY}
-    # model: "gpt-4o"
+    # model: "o3-mini"
 
   supervisor:
     # api_base_url: ${OPENAI_BASE_URL}
     # api_key: ${OPENAI_API_KEY}
-    # model: "gpt-4o"
+    # model: "o3-mini"
 
   debugging:
     # api_base_url: ${OPENAI_BASE_URL}
     # api_key: ${OPENAI_API_KEY}
-    # model: "gpt-4o"
+    # model: "o3-mini"
