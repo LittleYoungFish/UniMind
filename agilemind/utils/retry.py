@@ -9,7 +9,7 @@ from typing import Type, List
 
 def retry(
     max_attempts: int = 3,
-    delay: float = 1.0,
+    delay: float = 2.0,
     backoff_factor: float = 3.0,
     exceptions: List[Type[Exception]] = None,
 ):
@@ -41,17 +41,20 @@ def retry(
                 except tuple(exceptions) as e:
                     if attempt < max_attempts:
                         print(
-                            f"Attempt {attempt}/{max_attempts}. Retrying in {current_delay:.2f}s\nError: {e}"
+                            "Warning: "
+                            f"Attempt {attempt}/{max_attempts}. "
+                            f"Retrying in {current_delay:.2f}s"
                         )
                         time.sleep(current_delay)
                         current_delay *= backoff_factor
                         attempt += 1
                     else:
                         print(
-                            f"Attempt {attempt}/{max_attempts}. Max retries exceeded. Exiting.\nError: {e}"
+                            "Warning: "
+                            f"Attempt {attempt}/{max_attempts}. "
+                            "Max retries exceeded. Exiting."
                         )
-                        time.sleep(1)
-                        exit(1)
+                        raise
 
         return wrapper
 
