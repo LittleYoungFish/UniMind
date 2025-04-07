@@ -85,6 +85,7 @@ class LogWindow:
         intercept_print: bool = True,
         print_log_level: str = "INFO",
         auto_refresh: bool = True,
+        interactive: bool = True,
     ):
         """
         Initialize the LogWindow.
@@ -98,6 +99,7 @@ class LogWindow:
             intercept_print (bool): Whether to automatically intercept print function calls
             print_log_level (str): Log level to use for intercepted print messages
             auto_refresh (bool): Whether to automatically refresh the window at regular intervals
+            interactive (bool): Whether to show interactive window with rich.Live. If False, operates as a backend log collector.
         """
         self.title = title
         self.console = Console()
@@ -107,6 +109,7 @@ class LogWindow:
         self.refresh_per_second = refresh_per_second
         self.display_style = display_style
         self.hidden = False
+        self.interactive = interactive
         # Log storage
         self.logs: List[Tuple[datetime, str, str]] = []
         self.log_height = log_height
@@ -114,7 +117,9 @@ class LogWindow:
         self.full_screen = window_height is None
 
         # Auto-refresh settings
-        self.auto_refresh = auto_refresh
+        self.auto_refresh = (
+            auto_refresh and interactive
+        )  # Only auto-refresh in interactive mode
         self.auto_refresh_interval = 1.0 / refresh_per_second
         self._auto_refresh_thread = None
         self._stop_refresh_thread = threading.Event()
@@ -122,15 +127,15 @@ class LogWindow:
         # Store the print restore function
         self._restore_print = None
 
-        # Intercept print if requested
-        if intercept_print:
+        # Intercept print if requested and in interactive mode
+        if intercept_print and interactive:
             self._restore_print = self.intercept_print(level=print_log_level)
 
         self._calculate_heights()
 
     def _calculate_heights(self):
         """Calculate the heights of the different zones."""
-        if self.full_screen:
+        if self.full_screen and self.interactive:
             _, height = self.console.size
             self.window_height = height
             self.task_zone_height = max(1, self.window_height - self.log_height - 4)
@@ -146,18 +151,19 @@ class LogWindow:
 
     def open(self):
         """Open and display the log window."""
-        self._live = Live(
-            self._generate_display(),
-            console=self.console,
-            refresh_per_second=self.refresh_per_second,
-            screen=True,
-        )
-        self._live.start()
-        self.hidden = False
+        if self.interactive:
+            self._live = Live(
+                self._generate_display(),
+                console=self.console,
+                refresh_per_second=self.refresh_per_second,
+                screen=True,
+            )
+            self._live.start()
+            self.hidden = False
 
-        # Start auto-refresh thread if enabled
-        if self.auto_refresh:
-            self._start_auto_refresh()
+            # Start auto-refresh thread if enabled
+            if self.auto_refresh:
+                self._start_auto_refresh()
 
         return self
 
@@ -166,7 +172,7 @@ class LogWindow:
         # Stop the auto-refresh thread if it's running
         self._stop_auto_refresh()
 
-        if self._live:
+        if self._live and self.interactive:
             self._live.stop()
             self._live = None
             self.hidden = False
@@ -178,6 +184,9 @@ class LogWindow:
 
     def hide(self):
         """Temporarily hide the log window without closing it."""
+        if not self.interactive:
+            return
+
         # Stop auto-refresh while hidden
         self._stop_auto_refresh()
 
@@ -192,6 +201,9 @@ class LogWindow:
 
     def show(self):
         """Show the log window if it was hidden."""
+        if not self.interactive:
+            return
+
         if self.hidden:
             # Restart with the saved display
             self._live = Live(
@@ -213,6 +225,9 @@ class LogWindow:
 
     def toggle_visibility(self):
         """Toggle the visibility of the log window."""
+        if not self.interactive:
+            return
+
         if self.hidden:
             self.show()
         else:
@@ -240,7 +255,7 @@ class LogWindow:
         }
         self.task_hierarchy[task_id] = parent_id
 
-        if self._live:
+        if self._live and self.interactive:
             self._live.update(self._generate_display())
 
         return task_id
@@ -256,7 +271,7 @@ class LogWindow:
             self.tasks[task_id]["status"] = "completed"
             self.tasks[task_id]["time_completed"] = datetime.now()
 
-            if self._live:
+            if self._live and self.interactive:
                 self._live.update(self._generate_display())
 
     def update_task(self, task_id: str, status: str, description: Optional[str] = None):
@@ -273,7 +288,7 @@ class LogWindow:
             if description:
                 self.tasks[task_id]["description"] = description
 
-            if self._live:
+            if self._live and self.interactive:
                 self._live.update(self._generate_display())
 
     def set_display_style(self, style: Literal["tree", "table"]):
@@ -287,7 +302,7 @@ class LogWindow:
             raise ValueError("Display style must be either 'tree' or 'table'")
 
         self.display_style = style
-        if self._live:
+        if self._live and self.interactive:
             self._live.update(self._generate_display())
 
     def log(self, message: str, level: str = "INFO"):
@@ -305,18 +320,23 @@ class LogWindow:
             if line.strip():
                 self.logs.append((timestamp, level, line))
 
-        # Maintain fixed size by removing oldest logs
-        if len(self.logs) > self.log_height:
+        # Maintain fixed size by removing oldest logs if in interactive mode
+        # In non-interactive mode, keep all logs
+        if self.interactive and len(self.logs) > self.log_height:
             self.logs = self.logs[-self.log_height :]
 
-        # Update the display if live
-        if self._live:
+        # Update the display if live and interactive
+        if self._live and self.interactive:
             self._live.update(self._generate_display())
+
+        if not self.interactive:
+            # print the log message to console if not in interactive mode
+            print(Text(f"{level} - {message}"))
 
     def clear_logs(self):
         """Clear all logs from the log zone."""
         self.logs = []
-        if self._live:
+        if self._live and self.interactive:
             self._live.update(self._generate_display())
 
     def intercept_print(self, level: str = "INFO") -> Callable:
@@ -334,10 +354,11 @@ class LogWindow:
     def _start_auto_refresh(self):
         """Start a background thread for auto-refreshing the display."""
         if (
-            self._auto_refresh_thread is not None
+            not self.interactive
+            or self._auto_refresh_thread is not None
             and self._auto_refresh_thread.is_alive()
         ):
-            return  # Thread already running
+            return  # Thread already running or not in interactive mode
 
         self._stop_refresh_thread.clear()
         self._auto_refresh_thread = threading.Thread(
@@ -358,7 +379,7 @@ class LogWindow:
     def _auto_refresh_loop(self):
         """Background thread loop to periodically update the display."""
         while not self._stop_refresh_thread.is_set():
-            if self._live and not self.hidden:
+            if self._live and not self.hidden and self.interactive:
                 try:
                     self._live.update(self._generate_display())
                 except Exception:
@@ -374,6 +395,9 @@ class LogWindow:
             enabled (bool): Whether to enable auto-refresh
             interval (Optional[float]): Refresh interval in seconds. If None, uses existing interval.
         """
+        if not self.interactive:
+            return
+
         self.auto_refresh = enabled
         if interval is not None:
             self.auto_refresh_interval = interval
@@ -385,7 +409,9 @@ class LogWindow:
 
     def _generate_display(self) -> Panel:
         """Generate the display content."""
-        self._calculate_heights()
+        # Only calculate heights in interactive mode
+        if self.interactive:
+            self._calculate_heights()
 
         if self.display_style == "tree":
             max_items = max(1, self.task_zone_height - 1)
@@ -661,13 +687,13 @@ class LogWindow:
     def _get_status_style(self, status: str) -> str:
         """Get styled status text based on status value."""
         if status == "completed":
-            return "\N{WHITE HEAVY CHECK MARK} [green]COMPLETED[/green]"
+            return " [green]COMPLETED[/green]"
         elif status == "pending":
-            return "\N{HOURGLASS} [yellow]PENDING[/yellow]"
+            return " [yellow]PENDING[/yellow]"
         elif status == "failed":
-            return "\N{CROSS MARK} [red]FAILED[/red]"
+            return " [red]FAILED[/red]"
         elif status == "running":
             current_spinner_char = SPINNER[int(time.time() * 4) % 4]
             return f"[blue]{current_spinner_char} RUNNING[/blue]"
         else:
-            return "\N{INFORMATION SOURCE}" + f"[cyan]{status.upper()}[/cyan]"
+            return f" [cyan]{status.upper()}[/cyan]"
