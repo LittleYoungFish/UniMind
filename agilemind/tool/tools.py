@@ -273,44 +273,39 @@ class Tools:
     @staticmethod
     @tool(
         "get_code_structure",
-        description="Get the code structure of one or more files",
+        description="Get the code structure of one file",
         group="development",
     )
-    def get_code_structure(files: list[str]) -> Dict[str, Any]:
+    def get_code_structure(file: str) -> Dict[str, Any]:
         """
         Get the code structure of a module or all modules
 
         Args:
-            files: List of file paths to get the code structure for
+            file: file path to get the code structure for
 
         Returns:
             Dict containing success status and message
         """
         try:
-            results = {}
+            # If the file is not a subfile of cwd, return False
             cwd = Path(os.getcwd()).resolve()
+            file_path = Path(file).resolve()
+            if not file_path.is_relative_to(cwd):
+                return {
+                    "success": False,
+                    "message": f"Cannot get code structure of files outside the current directory: {file}",
+                }
 
-            for file in files:
-                # If the file is not a subdirectory or subfile of cwd, return False
-                file_path = Path(file).resolve()
-                if not file_path.is_relative_to(cwd):
-                    return {
-                        "success": False,
-                        "message": f"Cannot get code structure of files outside the current directory: {file}",
-                    }
-
-                if not os.path.isfile(file_path):
-                    return {
-                        "success": False,
-                        "message": f"Path not found or not a file: {file}",
-                    }
-
-                results[file] = extract_framework(file_path)
+            if not os.path.isfile(file_path):
+                return {
+                    "success": False,
+                    "message": f"Path not found or not a file: {file}",
+                }
 
             return {
                 "success": True,
                 "message": f"Code structure retrieved successfully",
-                "code_structure": results,
+                "code_structure": extract_framework(file_path),
             }
         except Exception as e:
             return {
