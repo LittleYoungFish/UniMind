@@ -17,7 +17,8 @@ class Context:
     raw_demand: str
     document: Dict[str, str] = {}
     history: List[Dict[str, Any]] = []
-    time: float = 0.0
+    started_at: str
+    finished_at: str
     token_usage: TokenUsage
     cost: Cost
     used_tools: List[Dict] = []
@@ -32,7 +33,7 @@ class Context:
         """
         self.root_dir = root_dir
         self.raw_demand = raw_demand
-        self.time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.token_usage = TokenUsage()
         self.cost = Cost()
 
@@ -178,8 +179,11 @@ class Context:
         Returns:
             Dictionary containing the context data
         """
+        self.finished_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         return {
-            "time": self.time,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
             "root_dir": self.root_dir,
             "raw_demand": self.raw_demand,
             "document": self.document,
