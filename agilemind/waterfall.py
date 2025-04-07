@@ -88,6 +88,7 @@ def run_workflow(
     demand: str,
     max_iterations: int = 5,
     model: Optional[str] = None,
+    interactive: bool = True,
 ) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
@@ -96,6 +97,7 @@ def run_workflow(
         demand: User demand for the software
         max_iterations: Maximum number of iterations for each agent
         model: Model to use for all agents
+        interactive: Whether to run in interactive mode
 
     Returns:
         Dictionary containing the software development process
@@ -392,7 +394,9 @@ def run_workflow(
     return context.dump()
 
 
-def dev(demand: str, output: str, model: str, max_iterations: int) -> dict:
+def dev(
+    demand: str, output: str, model: str, max_iterations: int, interactive: bool = True
+) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
 
@@ -401,6 +405,7 @@ def dev(demand: str, output: str, model: str, max_iterations: int) -> dict:
         output: Directory path to save the software
         model: String name of the model to use
         max_iterations: Maximum number of iterations to run
+        interactive: Whether to run in interactive mode
 
     Returns:
         Dictionary containing the software development process
@@ -431,7 +436,9 @@ def dev(demand: str, output: str, model: str, max_iterations: int) -> dict:
     os.chdir(output)
 
     try:
-        result = run_workflow(demand, model=model, max_iterations=max_iterations)
+        result = run_workflow(
+            demand, model=model, max_iterations=max_iterations, interactive=interactive
+        )
 
         with open("logs/development_record.json", "w") as f:
             f.write(json.dumps(result, indent=4))

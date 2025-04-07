@@ -76,6 +76,11 @@ def parse_args() -> argparse.Namespace:
         default=10,
         help="Maximum number of iterations to run",
     )
+    parser.add_argument(
+        "--interactive",
+        action="store_false",
+        help="Run in interactive mode",
+    )
 
     return parser.parse_args()
 

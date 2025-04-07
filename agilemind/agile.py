@@ -115,6 +115,7 @@ def build_prototype(
     window: LogWindow,
     demand: str,
     max_iterations: int = 5,
+    interactive: bool = True,
 ) -> tuple["str", "str"]:
     """
     Build a prototype of the software.
@@ -124,6 +125,7 @@ def build_prototype(
         window (LogWindow): CLI window for displaying progress
         demand (str): User demand for the software
         max_iterations (int): Maximum number of iterations to run
+        interactive (bool): Run in interactive mode
 
     Returns:
         out: Tuple of feedback and prototype
@@ -146,7 +148,7 @@ def build_prototype(
     client_satisfied = False
     revision_count = 0
     feedback = ""
-    while not client_satisfied and revision_count < max_iterations:
+    while interactive and not client_satisfied and revision_count < max_iterations:
         window.hide()
         console.print(
             Panel(
@@ -331,6 +333,7 @@ def implement_code(
     code_file_list: List[str],
     architecture: str,
     max_iterations: int = 5,
+    interactive: bool = True,
 ) -> None:
     """
     Implement the code for the software.
@@ -341,6 +344,7 @@ def implement_code(
         code_file_list (List[str]): List of code files to implement
         architecture (str): Architecture information of the software
         max_iterations (int): Maximum number of iterations to run
+        interactive (bool): Whether to run in interactive mode
 
     Returns:
         None
@@ -423,13 +427,22 @@ def implement_code(
 
         window.complete_task(current_file_task)
 
-    with ThreadPoolExecutor() as executor:
-        code_tasks = [
-            executor.submit(implement_and_review, architecture, file, max_iterations)
-            for file in code_file_list
-        ]
-        for task in as_completed(code_tasks):
-            task.result()
+    # Use different approaches based on interactive mode
+    if interactive:
+        # Use ThreadPoolExecutor for parallel execution in interactive mode
+        with ThreadPoolExecutor() as executor:
+            code_tasks = [
+                executor.submit(
+                    implement_and_review, architecture, file, max_iterations
+                )
+                for file in code_file_list
+            ]
+            for task in as_completed(code_tasks):
+                task.result()
+    else:
+        # Sequential execution for non-interactive mode (Streamlit compatibility)
+        for file in code_file_list:
+            implement_and_review(architecture, file, max_iterations)
 
     window.log("Code implementation completed.")
     window.complete_task(code_task)
@@ -646,6 +659,7 @@ def run_workflow(
     demand: str,
     max_iterations: int = 5,
     model: Optional[str] = None,
+    interactive: bool = True,
 ) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
@@ -654,6 +668,7 @@ def run_workflow(
         demand (str): User demand for the software
         max_iterations (int): Maximum number of iterations to run
         model (str, Optional): String name of the model to use
+        interactive (bool, Optional): Run in interactive mode
 
     Returns:
         out: Dictionary containing the software development process
@@ -665,33 +680,47 @@ def run_workflow(
     output_dir = os.path.abspath(os.getcwd())
     context = Context(demand, output_dir)
 
-    window = LogWindow(title="AgileMind Development")
+    window = LogWindow(title="AgileMind Development", interactive=interactive)
     window.open()
 
     window.log("Starting the software development process...")
 
     try:
-        feedback, prototype = build_prototype(context, window, demand, max_iterations)
+        feedback, prototype = build_prototype(
+            context, window, demand, max_iterations, interactive
+        )
         demand_analysis = analyze_demand(
             context, window, demand, feedback, prototype, max_iterations
         )
         file_list, architecture = build_architecture(
             context, window, demand_analysis, max_iterations
         )
-        implement_code(context, window, file_list, architecture, max_iterations)
+        implement_code(
+            context, window, file_list, architecture, max_iterations, interactive
+        )
         qa_check(context, window, file_list, architecture, max_iterations)
 
         with open("logs/development_record.json", "w") as f:
             f.write(json.dumps(context.dump(), indent=4))
     except Exception as e:
-        show_error_view(window, e)
+        if interactive:
+            show_error_view(window, e)
+        else:
+            print(f"Error: {str(e)}")
+            traceback.print_exc()
+            exit(1)
 
-    show_dev_summary(context, window)
+    if interactive:
+        show_dev_summary(context, window)
     return context.dump()
 
 
 def dev(
-    demand: str, output: str, model: Optional[str] = None, max_iterations: int = 5
+    demand: str,
+    output: str,
+    model: Optional[str] = None,
+    max_iterations: int = 5,
+    interactive: bool = True,
 ) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
@@ -701,6 +730,7 @@ def dev(
         output (str): Directory path to save the software
         model (str, Optional): String name of the model to use
         max_iterations (int, Optional): Maximum number of iterations to run
+        interactive (bool, Optional): Run in interactive mode
 
     Returns:
         out: Dictionary containing the software development process
@@ -739,7 +769,9 @@ def dev(
     os.chdir(output)
 
     try:
-        result = run_workflow(demand, model=model, max_iterations=max_iterations)
+        result = run_workflow(
+            demand, model=model, max_iterations=max_iterations, interactive=interactive
+        )
     finally:
         os.chdir(initial_cwd)  # Restore original working directory
 
