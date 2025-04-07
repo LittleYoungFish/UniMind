@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added online visualization of the project using streamlit.
+- Added "interactive" mode for the script.
+
+### Changed
+
+- Changed the "time" field in the output to "started_at" and "finished_at" for clarity.
+
+### Fixed
+
+- Fixed a bug where the "get_code_structure" tool produced incorrect OpenAI API schema.
+
 ## [0.0.3] - 2025-04-05
 
 ### Added
