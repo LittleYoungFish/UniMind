@@ -16,6 +16,10 @@ Agile Mind is an AI-powered development platform that builds software repositori
 
 Check out the online visualization of AgileMind!
 
+![AgileMindOnline](assets/main_screenshot.png)
+
+![FilesDeveloped](assets/files_screenshot.png)
+
 > Note that the online version does not support human-agent interaction and parallel processing yet. Consider using the command line version for those features.
 
 ### Usage
