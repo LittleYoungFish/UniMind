@@ -229,17 +229,17 @@ class Tools:
             Dict containing success status and message
         """
         if language.lower() == "python":
-            with open("requirements.txt", "r") as f:
-                requirements = [
-                    line.split("==")[0].split("<=")[0].split(">=")[0].strip()
-                    for line in f.readlines()
-                ]
-
-            if package_name in requirements:
-                return {
-                    "success": True,
-                    "message": f"{package_name} already exists in requirements.txt",
-                }
+            if os.path.exists("requirements.txt"):
+                with open("requirements.txt", "r") as f:
+                    requirements = [
+                        line.split("==")[0].split("<=")[0].split(">=")[0].strip()
+                        for line in f.readlines()
+                    ]
+                if package_name in requirements:
+                    return {
+                        "success": True,
+                        "message": f"{package_name} already exists in requirements.txt",
+                    }
 
             with open("requirements.txt", "a") as f:
                 if version:
