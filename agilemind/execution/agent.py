@@ -30,6 +30,7 @@ class Agent:
         instructions: str,
         tools: Optional[List[Dict[str, str]]] = None,
         handoffs: Optional[List["Agent"]] = None,
+        inform: Optional[List["Agent"]] = None,
         next_agent: Optional["Agent"] = None,
         model: str = "gpt-4o-mini",
         save_path: Optional[str] = None,
@@ -47,6 +48,7 @@ class Agent:
             instructions: Instructions that define the agent's behavior.
             tools: Optional list of tools the agent can use.
             handoffs: Optional list of agents this agent can hand off to.
+            inform: Optional list of agents this agent can send messages to.
             next_agent: Optional next agent for forced handoff regardless of the agent's decision.
             model: OpenAI model to use for this agent
             save_path: Optional path to save agent's responses for documentation purposes
@@ -60,6 +62,7 @@ class Agent:
         self.instructions = instructions
         self.tools = tools or []
         self.handoffs = handoffs or []
+        self.inform = inform or []
         self.next_agent = next_agent
         self.model = model
         self.save_path = save_path
@@ -67,6 +70,9 @@ class Agent:
         self.generation_params = generation_params
         self.multi_turn = multi_turn
         self.memory = []
+
+        # Make sure agents appear only once in the inform list
+        self.inform = list(set(self.inform))
 
         if isinstance(generation_params, dict):
             self.generation_params = GenerationParams(**generation_params)
@@ -108,6 +114,10 @@ class Agent:
         """Return the list of agents this agent can hand off to."""
         return self.handoffs
 
+    def get_available_inform(self) -> List["Agent"]:
+        """Return the list of agents this agent can send messages to."""
+        return self.inform
+
     def set_model(self, model: str) -> None:
         """
         Set the model to use for this agent.
@@ -140,6 +150,7 @@ class Agent:
         input_text: str,
         max_iterations: int = None,
         clear_memory: bool = True,
+        check_messages: bool = True,
     ) -> Dict:
         """
         Process the input using OpenAI API and return the agent's response.
@@ -150,6 +161,7 @@ class Agent:
             input_text: The text input to process
             max_iterations: Maximum number of interaction rounds (None means no limit)
             clear_memory: If True, clears the memory before processing; if False, appends to existing memory
+            check_messages: If True, checks and includes messages from queue in the input
 
         Returns:
             Dict: containing:
@@ -159,6 +171,25 @@ class Agent:
                 - reason: Reason for ending the conversation
                 - handoff: Dict with agent object and instructions if handoff occurred
         """
+        # Check if there are any messages for this agent
+        if check_messages and context.has_messages(self.name):
+            messages = context.dequeue_messages(self.name)
+            if messages:
+                messages_text = "\n\n".join(
+                    [
+                        f"Message from {msg.get('sender', 'unknown')}: {msg.get('content', '')}"
+                        for msg in messages
+                        if "content" in msg
+                    ]
+                )
+
+                input_text = (
+                    f"{input_text}\n\n\n"
+                    f"--- These are messages for you from other agents in the developing process ---\n"
+                    f"{messages_text}\n"
+                    f"----------------------\n"
+                )
+
         result = self._process_with_retry(
             context, input_text, max_iterations, clear_memory
         )
@@ -228,6 +259,8 @@ class Agent:
 
         # Add handoff agents as tools
         tools_with_handoffs = self.tools.copy()
+
+        # Add handoff tools for each handoff agent
         for agent in self.handoffs:
             tools_with_handoffs.append(
                 {
@@ -243,6 +276,28 @@ class Agent:
                                     "description": "Instructions for that character to follow.",
                                 }
                             },
+                        },
+                    },
+                }
+            )
+
+        # Add inform tools for each agent in the inform list
+        for agent in self.inform:
+            tools_with_handoffs.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": f"inform_{agent.name}",
+                        "description": f"Send a message to the {agent.name} which will be delivered when they are next active.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "content": {
+                                    "type": "string",
+                                    "description": "The message content to send to the agent.",
+                                }
+                            },
+                            "required": ["content"],
                         },
                     },
                 }
@@ -360,6 +415,76 @@ class Agent:
                                 break
                         if handoff_requested:
                             break
+                    # Check if this is an inform_xxx tool
+                    elif tool_name.startswith("inform_"):
+                        target_agent_name = tool_name[len("inform_") :]
+                        args = json.loads(tool_call.function.arguments)
+                        message_content = args.get("content", "")
+
+                        # Validate target agent is in the inform list
+                        valid_target = False
+                        for agent in self.inform:
+                            if agent.name == target_agent_name:
+                                valid_target = True
+                                break
+
+                        if valid_target:
+                            # Queue the message for the target agent
+                            context.enqueue_message(
+                                target_agent=target_agent_name,
+                                message={"content": message_content},
+                                sender=self.name,
+                            )
+                            tool_result = {
+                                "status": "Message queued for delivery to "
+                                + target_agent_name
+                            }
+                        else:
+                            # If not a valid target, return an error
+                            tool_result = {
+                                "status": "Error: Agent "
+                                + target_agent_name
+                                + " is not in the inform list"
+                            }
+
+                        # Add the tool call and result to messages for the next turn
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": tool_call.id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": tool_name,
+                                            "arguments": tool_call.function.arguments,
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": json.dumps(tool_result),
+                            }
+                        )
+
+                        # Update memory with the new messages
+                        if messages[-2] not in self.memory:  # Avoid duplicates
+                            self.memory.append(messages[-2])
+                        if messages[-1] not in self.memory:  # Avoid duplicates
+                            self.memory.append(messages[-1])
+
+                        # Record tool usage
+                        current_tool_call = {
+                            "tool": tool_name,
+                            "args": args,
+                            "result": tool_result,
+                        }
+                        current_round_tool_calls.append(current_tool_call)
                     elif tool_name == "work_done":
                         # Mark that work_done was called
                         work_done_called = True

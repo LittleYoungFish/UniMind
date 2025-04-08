@@ -5,6 +5,7 @@ Context module for managing state and data flow throughout the pipeline executio
 from .cost import Cost
 from datetime import datetime
 from .token_usage import TokenUsage
+from .message_queue import MessageQueue
 from typing import Any, Dict, List, Optional
 
 
@@ -22,6 +23,7 @@ class Context:
     token_usage: TokenUsage
     cost: Cost
     used_tools: List[Dict] = []
+    message_queue: MessageQueue
 
     def __init__(self, raw_demand: str, root_dir: Optional[str] = None):
         """
@@ -36,6 +38,7 @@ class Context:
         self.started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.token_usage = TokenUsage()
         self.cost = Cost()
+        self.message_queue = MessageQueue()
 
     def is_root_dir_set(self) -> bool:
         """Check if the root directory is set in the context."""
@@ -171,6 +174,55 @@ class Context:
             round_number=round_number,
             model=model,
         )
+
+    def enqueue_message(
+        self, target_agent: str, message: Dict[str, Any], sender: Optional[str] = None
+    ) -> None:
+        """
+        Add a message to a specific agent's queue.
+
+        Args:
+            target_agent: Name of the agent to receive the message
+            message: The message content to enqueue
+            sender: Optional name of the sending agent
+        """
+        self.message_queue.enqueue(target_agent, message, sender)
+
+    def get_messages(self, agent: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve all messages for a specific agent without removing them.
+
+        Args:
+            agent: Name of the agent to retrieve messages for
+
+        Returns:
+            List of messages for the agent
+        """
+        return self.message_queue.get_messages(agent)
+
+    def dequeue_messages(self, agent: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve and remove all messages for a specific agent.
+
+        Args:
+            agent: Name of the agent to dequeue messages for
+
+        Returns:
+            List of messages for the agent
+        """
+        return self.message_queue.dequeue_all(agent)
+
+    def has_messages(self, agent: str) -> bool:
+        """
+        Check if a specific agent has any messages in the queue.
+
+        Args:
+            agent: Name of the agent to check
+
+        Returns:
+            True if agent has messages, False otherwise
+        """
+        return self.message_queue.has_messages(agent)
 
     def dump(self) -> Dict[str, Any]:
         """
