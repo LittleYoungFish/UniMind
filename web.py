@@ -256,6 +256,7 @@ def start_development_process(
     output_dir: str,
     api_key: str,
     api_base_url: str,
+    uploaded_file: Optional[io.BytesIO] = None,
     max_iterations: int = 5,
 ):
     """Actual development process execution after UI update."""
@@ -271,13 +272,37 @@ def start_development_process(
                 logging.info(f"Model: {model}")
                 logging.info(f"Output directory: {output_dir}")
 
+                # Handle the uploaded file if present
+                file_path = None
+                if uploaded_file is not None:
+                    # Create a temp file to store the uploaded content
+                    temp_file = tempfile.NamedTemporaryFile(
+                        delete=False, suffix=os.path.splitext(uploaded_file.name)[1]
+                    )
+                    temp_file.write(uploaded_file.getvalue())
+                    temp_file.close()
+                    file_path = temp_file.name
+                    logging.info(
+                        f"Using uploaded file: {uploaded_file.name} (saved as {file_path})"
+                    )
+
                 result = agile_dev(
                     demand=demand,
                     output=output_dir,
                     model=model,
+                    file=file_path,  # Pass the file path to agile_dev
                     max_iterations=max_iterations,
                     interactive=False,
                 )
+
+                # Clean up the temp file after development is complete
+                if file_path and os.path.exists(file_path):
+                    try:
+                        os.unlink(file_path)
+                    except Exception as e:
+                        logging.warning(
+                            f"Failed to delete temporary file {file_path}: {e}"
+                        )
 
             st.session_state.output_dir = output_dir
             st.session_state.generated_files = scan_directory(output_dir)
@@ -713,6 +738,11 @@ elif st.session_state.development_in_progress:
         output_dir=output_dir,
         api_key=api_key,
         api_base_url=api_base_url,
+        uploaded_file=(
+            st.session_state.uploaded_file
+            if "uploaded_file" in st.session_state
+            else None
+        ),
         max_iterations=max_iterations,
     )
 
@@ -727,6 +757,14 @@ else:
             help="Provide a detailed description of what you want AgileMind to build",
             value="Create a 2048 game with a modern UI, keyboard controls, and score tracking.",
         )
+
+        # Add file uploader component
+        uploaded_file = st.file_uploader(
+            "Upload a file (optional)",
+            help="Upload a file to be used in the development process",
+            type=None,  # Allow all file types
+        )
+
         if st.form_submit_button("Start Development"):
             if not api_key:
                 st.error("Please provide an API key")
@@ -734,6 +772,8 @@ else:
                 st.error("Please describe the software you want to build")
             else:
                 st.session_state.demand = demand
+                if uploaded_file is not None:
+                    st.session_state.uploaded_file = uploaded_file
                 st.session_state.development_in_progress = True
                 st.session_state.development_complete = False
                 st.rerun()
