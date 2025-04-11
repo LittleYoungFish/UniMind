@@ -19,17 +19,18 @@ from datetime import datetime
 from rich.columns import Columns
 from rich import print as rprint
 from agilemind.tool import get_tool
-from agilemind.execution import Agent
 from agilemind.context import Context
 from rich.console import Console, Group
 from typing import Dict, List, Optional
 from agilemind.prompt import agile_prompt
+from agilemind.execution import Agent, deterministic_generation
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from agilemind.utils import (
     LogWindow,
     load_config,
     extract_json,
     create_file_tree,
+    copy_to_directory,
     extract_agent_llm_config,
     convert_json_to_markdown,
 )
@@ -56,13 +57,15 @@ architect = Agent(
     description="Design architecture of the software",
     instructions=agile_prompt.ARCHITECT,
     tools=[get_tool("write_file")],
+    generation_params=deterministic_generation,
     **extract_agent_llm_config("architecture", config),
 )
 developer = Agent(
     name="developer",
     description="Implement code for the software",
     instructions=agile_prompt.DEVELOPER,
-    tools=[get_tool("write_file")],
+    tools=[get_tool("write_file"), get_tool("add_to_requirements")],
+    generation_params=deterministic_generation,
     **extract_agent_llm_config("programming", config),
 )
 supervisor = Agent(
@@ -71,6 +74,7 @@ supervisor = Agent(
     instructions=agile_prompt.DEVELOPING_SUPERVISOR,
     tools=[get_tool("work_done")],
     handoffs=[developer],
+    generation_params=deterministic_generation,
     **extract_agent_llm_config("supervisor", config),
 )
 debugging_engineer = Agent(
@@ -81,7 +85,9 @@ debugging_engineer = Agent(
         get_tool("get_code_structure"),
         get_tool("read_file"),
         get_tool("write_file"),
+        get_tool("add_to_requirements"),
     ],
+    generation_params=deterministic_generation,
     **extract_agent_llm_config("debugging", config),
 )
 qa = Agent(
@@ -98,6 +104,19 @@ qa = Agent(
     multi_turn=True,
     **extract_agent_llm_config("debugging", config),
 )
+document_writer = Agent(
+    name="document_writer",
+    description="Write documentation for the software",
+    instructions=agile_prompt.DOCUMENT_WRITER,
+    tools=[
+        get_tool("list_project_structure"),
+        get_tool("get_code_structure"),
+        get_tool("read_file"),
+        get_tool("write_file"),
+    ],
+    generation_params=deterministic_generation,
+    **extract_agent_llm_config("documentation", config),
+)
 
 all_agents = [
     prototype_builder,
@@ -107,6 +126,7 @@ all_agents = [
     supervisor,
     qa,
     debugging_engineer,
+    document_writer,
 ]
 
 
@@ -114,6 +134,7 @@ def build_prototype(
     context: Context,
     window: LogWindow,
     demand: str,
+    file: Optional[str] = None,
     max_iterations: int = 5,
     interactive: bool = True,
 ) -> tuple["str", "str"]:
@@ -124,6 +145,7 @@ def build_prototype(
         context (Context): Context object containing the software development process
         window (LogWindow): CLI window for displaying progress
         demand (str): User demand for the software
+        file (str, Optional): Path of the file as part of the demand
         max_iterations (int): Maximum number of iterations to run
         interactive (bool): Run in interactive mode
 
@@ -135,7 +157,7 @@ def build_prototype(
 
     prototype_task = window.add_task("Developing prototype", status="running")
 
-    prototype_builder.process(context, demand, max_iterations)
+    prototype_builder.process(context, demand, max_iterations, file=file)
 
     if not os.path.isfile("docs/prototype.html"):
         print("Critical: Prototype file not found")
@@ -201,6 +223,7 @@ def analyze_demand(
     demand: str,
     feedback: str,
     prototype: str,
+    file: Optional[str] = None,
     max_iterations: int = 5,
 ) -> str:
     """
@@ -212,6 +235,7 @@ def analyze_demand(
         demand (str): User demand for the software
         feedback (str): Feedback from the client
         prototype (str): Final prototype of the software
+        file (str, Optional): Path of the file as part of the demand
         max_iterations (int): Maximum number of iterations to run
 
     Raises:
@@ -230,7 +254,7 @@ def analyze_demand(
     round_count = 0
     while round_count < max_iterations:
         round_count += 1
-        demand_analyst.process(context, demand_info, max_iterations)
+        demand_analyst.process(context, demand_info, max_iterations, file=file)
         if not os.path.isfile("docs/demand_analysis.md"):
             print("Critical: Demand analysis file not found")
             continue
@@ -364,18 +388,24 @@ def implement_code(
         Returns:
             None
         """
+
+        # Create a thread-local developer by cloning the global developer instance
+        thread_developer = developer.clone(
+            name_suffix=f"_{os.path.basename(file_path)}"
+        )
+
         current_file_task = window.add_task(
             f"Implementing {file_path}", parent_id=code_task, status="running"
         )
         round_count = 0
         while round_count < max_iterations:
             round_count += 1
-            developer.process(
+            thread_developer.process(
                 context,
                 agile_prompt.DEVELOPING_TEMPLATE.format(
                     architecture=architecture, file_path=file_path
                 ),
-                clear_memory=False,
+                clear_memory=True if round_count == 1 else False,
             )
             if not os.path.isfile(file_path):
                 print(f"Warning: {file_path} file not found. Retrying...")
@@ -417,7 +447,7 @@ def implement_code(
             )
 
             instruction = supervisor_res["handoff"]["instruction"]
-            developer.process(
+            thread_developer.process(
                 context,
                 agile_prompt.QA_FEEDBACK_TEMPLATE.format(
                     file_path=file_path, description=instruction
@@ -505,6 +535,41 @@ def qa_check(
     return
 
 
+def draft_documentation(
+    context: Context,
+    window: LogWindow,
+    demand: str,
+    architecture: str,
+    max_iterations: int = 5,
+) -> None:
+    """
+    Draft documentation for the software.
+
+    Args:
+        context (Context): Context object containing the software development process
+        window (LogWindow): CLI window for displaying progress
+        demand (str): User demand for the software
+        architecture (str): Architecture information of the software
+        max_iterations (int): Maximum number of iterations to run
+
+    Returns:
+        None
+    """
+    window.log("Drafting documentation for the software...")
+    doc_task = window.add_task("Drafting documentation", status="running")
+
+    document_writer.process(
+        context,
+        agile_prompt.DOCUMENT_WRITER_TEMPLATE.format(
+            raw_demand=demand, architecture=architecture
+        ),
+        max_iterations=max_iterations,
+    )
+
+    window.complete_task(doc_task)
+    return None
+
+
 def show_error_view(window: LogWindow, error: Exception) -> None:
     """
     Display a detailed error panel when an uncaught exception occurs.
@@ -560,7 +625,7 @@ def show_dev_summary(context: Context, window: LogWindow) -> None:
     window.close()
 
     # Calculate elapsed time
-    start_time = datetime.strptime(context.time, "%Y-%m-%d %H:%M:%S")
+    start_time = datetime.strptime(context.started_at, "%Y-%m-%d %H:%M:%S")
     end_time = datetime.now()
     elapsed_time = end_time - start_time
 
@@ -605,7 +670,7 @@ def show_dev_summary(context: Context, window: LogWindow) -> None:
         ),
     )
     summary_table.add_row("Output Directory", context.root_dir)
-    summary_table.add_row("Development Start Time", context.time)
+    summary_table.add_row("Development Start Time", context.started_at)
     summary_table.add_row(
         "Development Duration", f"{elapsed_time.total_seconds():.2f} seconds"
     )
@@ -657,6 +722,7 @@ def show_dev_summary(context: Context, window: LogWindow) -> None:
 
 def run_workflow(
     demand: str,
+    file: Optional[str] = None,
     max_iterations: int = 5,
     model: Optional[str] = None,
     interactive: bool = True,
@@ -666,6 +732,7 @@ def run_workflow(
 
     Args:
         demand (str): User demand for the software
+        file (str, Optional): Path of the file as part of the demand
         max_iterations (int): Maximum number of iterations to run
         model (str, Optional): String name of the model to use
         interactive (bool, Optional): Run in interactive mode
@@ -687,10 +754,10 @@ def run_workflow(
 
     try:
         feedback, prototype = build_prototype(
-            context, window, demand, max_iterations, interactive
+            context, window, demand, file, max_iterations, interactive
         )
         demand_analysis = analyze_demand(
-            context, window, demand, feedback, prototype, max_iterations
+            context, window, demand, feedback, prototype, file, max_iterations
         )
         file_list, architecture = build_architecture(
             context, window, demand_analysis, max_iterations
@@ -699,6 +766,7 @@ def run_workflow(
             context, window, file_list, architecture, max_iterations, interactive
         )
         qa_check(context, window, file_list, architecture, max_iterations)
+        draft_documentation(context, window, demand, architecture, max_iterations)
 
         with open("logs/development_record.json", "w") as f:
             f.write(json.dumps(context.dump(), indent=4))
@@ -718,6 +786,7 @@ def run_workflow(
 def dev(
     demand: str,
     output: str,
+    file: Optional[str] = None,
     model: Optional[str] = None,
     max_iterations: int = 5,
     interactive: bool = True,
@@ -728,6 +797,7 @@ def dev(
     Args:
         demand (str): User demand for the software
         output (str): Directory path to save the software
+        file (str, Optional): Path of the file as part of the demand
         model (str, Optional): String name of the model to use
         max_iterations (int, Optional): Maximum number of iterations to run
         interactive (bool, Optional): Run in interactive mode
@@ -764,13 +834,28 @@ def dev(
     Path(output, "docs").mkdir(parents=True, exist_ok=True)
     Path(output, "logs").mkdir(parents=True, exist_ok=True)
 
+    if file:
+        # Copy the file to the output directory
+        if not os.path.isfile(file):
+            raise FileNotFoundError(f"File {file} not found.")
+        copy_to_directory(file, Path(output, "logs").as_posix())
+        file = (
+            (Path(output, "logs") / Path(file).name)
+            .relative_to(Path(output))
+            .as_posix()
+        )
+
     # Change current working directory to the output directory
     initial_cwd = os.getcwd()
     os.chdir(output)
 
     try:
         result = run_workflow(
-            demand, model=model, max_iterations=max_iterations, interactive=interactive
+            demand,
+            file=file,
+            model=model,
+            max_iterations=max_iterations,
+            interactive=interactive,
         )
     finally:
         os.chdir(initial_cwd)  # Restore original working directory

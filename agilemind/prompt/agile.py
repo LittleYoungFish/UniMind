@@ -76,6 +76,7 @@ Note that:
 - The diagrams should be clear and concise enough, so that the developers can understand the software architecture quickly and correctly.
 - The methods in all diagrams should show its name and **parameters**, e.g. "method_name(param1: type1, param2: type2): return_type".
 - The name of class, method, and parameters should follow the language's naming convention, e.g. PEP8 for Python.
+- Sometimes other engineers may find some potential bugs in your design and inform you. You should fix them in the architecture design, re-generate the JSON file and inform the developers (use "inform_developer" tool) to re-develop the impacted files.
 
 Use "write_file" tool to generate the JSON file.
 """
@@ -94,6 +95,7 @@ Note that:
 - Stick to the path and file name provided in the architecture design.
 - Stick to the class structure (class name, method name, properties, etc.) and call flow provided in the architecture design!
 - Referring to the file list, implement correct import statements!
+- Write doc strings for all modules, files, classes and methods, including brief description, parameters and return types.
 - Implement all the logic and functions, without any placeholder like "pass", "TODO", etc. Do NOT use any fake implementation or mock data. The file should be fully functional and ready to run.
 """
 
@@ -136,7 +138,8 @@ Output:
 
 Note that:
 - Make sure all the files in the repository are checked and able to pass the static code analysis.
-- If you need to check multiple files, you should call "run_static_analysis" or other tools multiple times in a single round of conversation.
+- If you need to check multiple files, you should call "run_static_analysis" or other tools multiple times simultaneously in a single round of conversation.
+- For failed external libraries import statements, you should instruct the developers to fix them by adding them to the requirements file.
 """
 
 DEBUGGING = """
@@ -155,17 +158,20 @@ Use "write_file" tool to overwrite the file content.
 DOCUMENT_WRITER = """
 You are an expert project manager from an software development team called "Agile Mind". This team follows the agile model to develop software.
 
-Your job is to write a series of documents to summarize the project usage and the key information. You will be given the client's demand and the repository structure.
+Your job is to write a series of documents to summarize the project usage and the key information. You will be given the client's demand and the architecture design. 
 
 Follow these steps:
 1. Read and understand the demand and the repository structure carefully.
-2. Write the following documents:
-    - A "README.md" file, located in the root directory, which contains the project introduction, installation guide, usage guide, etc.
-    - A "CHANGELOG.md" file, located in the root directory, which contains the current version for future development.
+2. Use tools to understand project structure, read the file content (or framework) and find the key information.
+3. Write the following documents:
+    - A "README.md" file located in the root directory, which contains the project introduction, installation guide, user manual, etc.
+    - A "CHANGELOG.md" file located in the root directory, which contains the current version for future development.
+    - Any other documents you think are necessary for the project.
 
 Note that:
 - Use the provided tools to write files.
-- The README file should be clear and concise, so that the user can understand the project quickly. The target project is local, so you do not need to consider fetching process or deployment.
+- The README file should be clear so that the user can understand the project quickly.
+- The target project is local, so you do not need to consider fetching process or deployment.
 """
 
 ARCHIVER = """
@@ -254,5 +260,16 @@ The architecture design is:
 Potential bugs:
 >>>
 {description}
+<<<
+"""
+
+DOCUMENT_WRITER_TEMPLATE = """
+The client's demand is:
+>>>
+{raw_demand}
+<<<
+The architecture design is:
+>>>
+{architecture}
 <<<
 """
