@@ -13,6 +13,22 @@ from agilemind.agile import dev as agile_dev
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 
 
+class ApplicationLogFilter(logging.Filter):
+    """Filter to only show logs from agilemind modules and direct prints."""
+
+    def __init__(self):
+        super().__init__()
+        self.allowed_modules = ["agilemind"]
+
+    def filter(self, record):
+        # Always allow direct print statements
+        if not hasattr(record, "name") or record.name == "root":
+            return True
+
+        # Only allow logs from agilemind modules
+        return any(record.name.startswith(module) for module in self.allowed_modules)
+
+
 class StreamToLogger:
     """Redirect stdout/stderr to a logger."""
 
@@ -78,6 +94,10 @@ def setup_logging():
     # Create and configure our custom handler
     handler = WebLogHandler(log_container)
     handler.setLevel(logging.INFO)
+
+    # Add a filter to only show application logs
+    app_filter = ApplicationLogFilter()
+    handler.addFilter(app_filter)
 
     # Get the root logger and configure it
     root_logger = logging.getLogger()
@@ -267,7 +287,7 @@ def start_development_process(
             logging.error(f"Error during development: {str(e)}")
             st.exception(e)
         finally:
-            st.toast("Development process completed", icon="✅")
+            st.toast("Development process completed")
             st.session_state.development_complete = True
             st.session_state.development_in_progress = False
             st.rerun()
@@ -279,7 +299,13 @@ def display_development_stats():
 
     # Check if stats has required data
     if not stats or not isinstance(stats, dict):
-        st.warning("Development statistics not available")
+        st.header("⚠️ Development Statistics Unavailable")
+        st.warning(
+            "Development statistics not available.\n\n"
+            "This could be due to an error during the development process or "
+            "the process not being completed successfully.\n\n"
+            "Please try again or check the logs for more information."
+        )
         return
 
     # Extract data from stats
@@ -630,6 +656,7 @@ with st.sidebar:
     )
     api_base_url = st.text_input(
         "API Base URL (Optional)",
+        type="password",
         value="https://api.openai.com/v1",
         help="Custom API endpoint URL (if using a proxy)",
     )
