@@ -398,8 +398,8 @@ def display_development_stats():
                 f for f in files if f.endswith((".py", ".js", ".html", ".css"))
             ]
             doc_files = [f for f in files if f.endswith((".md", ".txt", ".json"))]
-            st.metric("Files Created", len(files))
             st.metric("Code Files", len(code_files))
+            st.metric("Line Count", sum(len(files[f].splitlines()) for f in code_files))
             st.metric("Doc Files", len(doc_files))
 
     with tab1:
