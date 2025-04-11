@@ -71,6 +71,14 @@ def parse_args() -> argparse.Namespace:
         help="String name of the model to use",
     )
     parser.add_argument(
+        "-f",
+        "--file",
+        type=str,
+        required=False,
+        help="Path of file as part of the demand",
+    )
+    parser.add_argument(
+        "-i",
         "--max_iterations",
         type=int,
         default=10,

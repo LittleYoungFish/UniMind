@@ -34,7 +34,12 @@ demand_analyst = Agent(
 
 
 def dev(
-    demand: str, output: str, model: str, max_iterations: int, interactive: bool = True
+    demand: str,
+    output: str,
+    model: str,
+    max_iterations: int,
+    file: str = None,
+    interactive: bool = True,
 ) -> Dict[str, str]:
     """
     Run the LLM-Agent workflow pipelines.
@@ -44,6 +49,7 @@ def dev(
         output: Directory path to save the software
         model: String name of the model to use
         max_iterations: Maximum number of iterations to run
+        file: Path of file as part of the demand
         interactive: Run in interactive mode
 
     Returns:

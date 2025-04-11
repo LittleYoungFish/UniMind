@@ -395,7 +395,12 @@ def run_workflow(
 
 
 def dev(
-    demand: str, output: str, model: str, max_iterations: int, interactive: bool = True
+    demand: str,
+    output: str,
+    model: str,
+    max_iterations: int,
+    file: Optional[str] = None,
+    interactive: bool = True,
 ) -> dict:
     """
     Run the LLM-Agent workflow pipelines.
@@ -405,6 +410,7 @@ def dev(
         output: Directory path to save the software
         model: String name of the model to use
         max_iterations: Maximum number of iterations to run
+        file: Optional path of a file as part of the demand
         interactive: Whether to run in interactive mode
 
     Returns:
