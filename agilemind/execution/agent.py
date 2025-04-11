@@ -5,6 +5,7 @@ Agent module for creating agents that can process inputs, use tools, and hand of
 import os
 import json
 import openai
+import base64
 from rich.align import Align
 from rich.panel import Panel
 from rich import print as rprint
@@ -12,7 +13,7 @@ from .config import GenerationParams
 from agilemind.context import Context
 from agilemind.tool import execute_tool
 from typing import List, Optional, Dict, Union
-from agilemind.utils import retry, calculate_cost, clean_json_string
+from agilemind.utils import retry, calculate_cost, clean_json_string, get_model_info
 
 
 class Agent:
@@ -70,6 +71,8 @@ class Agent:
         self.generation_params = generation_params
         self.multi_turn = multi_turn
         self.memory = []
+        self.llm_base_url = llm_base_url
+        self.llm_api_key = llm_api_key
 
         # Make sure agents appear only once in the inform list
         self.inform = list(set(self.inform))
@@ -144,6 +147,40 @@ class Agent:
         with open(self.save_path, "a") as f:
             f.write(response_content + "\n\n")
 
+    def clone(self, name_suffix: str = ""):
+        """
+        Creates a clone of this agent with independent memory and rounds.
+
+        Args:
+            name_suffix: Optional suffix to append to the cloned agent's name
+
+        Returns:
+            Agent: A new agent instance with the same configuration but independent state
+        """
+        new_name = f"{self.name}{name_suffix}" if name_suffix else self.name
+
+        cloned_agent = Agent(
+            name=new_name,
+            description=self.description,
+            instructions=self.instructions,
+            tools=self.tools.copy() if self.tools else None,
+            handoffs=self.handoffs.copy() if self.handoffs else None,
+            inform=self.inform.copy() if self.inform else None,
+            next_agent=self.next_agent,
+            model=self.model,
+            save_path=self.save_path,
+            generation_params=self.generation_params,
+            llm_base_url=self.llm_base_url,
+            llm_api_key=self.llm_api_key,
+            multi_turn=self.multi_turn,
+        )
+
+        # Ensure the cloned agent has independent memory and rounds
+        cloned_agent.memory = []
+        cloned_agent.rounds = []
+
+        return cloned_agent
+
     def process(
         self,
         context: Context,
@@ -151,6 +188,7 @@ class Agent:
         max_iterations: int = None,
         clear_memory: bool = True,
         check_messages: bool = True,
+        file: Optional[str] = None,
     ) -> Dict:
         """
         Process the input using OpenAI API and return the agent's response.
@@ -162,6 +200,7 @@ class Agent:
             max_iterations: Maximum number of interaction rounds (None means no limit)
             clear_memory: If True, clears the memory before processing; if False, appends to existing memory
             check_messages: If True, checks and includes messages from queue in the input
+            file: Optional path to a file to include as multimodal input (if model supports it)
 
         Returns:
             Dict: containing:
@@ -190,8 +229,24 @@ class Agent:
                     f"----------------------\n"
                 )
 
+        # Handle file input for multimodal models
+        has_file_input = False
+        if file is not None:
+            # Check if model supports multimodal inputs
+            model_info = get_model_info(self.model)
+            if model_info.is_multimodal and os.path.exists(file):
+                has_file_input = True
+            elif not model_info.is_multimodal and os.path.exists(file):
+                raise ValueError(
+                    f"Model {self.model} does not support multimodal inputs, but a file was provided."
+                )
+
         result = self._process_with_retry(
-            context, input_text, max_iterations, clear_memory
+            context,
+            input_text,
+            max_iterations,
+            clear_memory,
+            file if has_file_input else None,
         )
         context.add_history(self.name, result.copy())
         return result
@@ -212,6 +267,7 @@ class Agent:
         input_text: str,
         max_iterations: int = None,
         clear_memory: bool = True,
+        file: Optional[str] = None,
     ) -> Dict:
         """
         Internal method to process input with retry capabilities.
@@ -222,6 +278,7 @@ class Agent:
             input_text: The text input to process
             max_iterations: Maximum number of interaction rounds (None means no limit)
             clear_memory: If True, clears the memory before processing; if False, appends to existing memory
+            file: Optional path to a file to include as multimodal input
 
         Returns:
             Dict: containing:
@@ -231,7 +288,7 @@ class Agent:
                 - reason: Reason for ending the conversation
                 - handoff: Dict with agent object and instructions if handoff occurred
         """
-        messages = self._prepare_messages(input_text, clear_memory)
+        messages = self._prepare_messages(input_text, clear_memory, file)
 
         # Initialize rounds tracking for internal use
         self.rounds = []
@@ -610,7 +667,7 @@ class Agent:
         return result
 
     def _prepare_messages(
-        self, input_text: str, clear_memory: bool = True
+        self, input_text: str, clear_memory: bool = True, file: Optional[str] = None
     ) -> List[Dict]:
         """
         Prepare the message for the API call.
@@ -619,6 +676,7 @@ class Agent:
             input_text: The text input to process
             clear_memory: If True, clears the memory before preparing messages;
                           if False, includes memory in the conversation
+            file: Optional path to a file to include as multimodal input
         """
         # Clear memory if requested
         if clear_memory:
@@ -631,8 +689,35 @@ class Agent:
         if self.memory:
             messages.extend(self.memory)
 
-        # Add the new user message
-        user_message = {"role": "user", "content": input_text}
+        if file and os.path.exists(file):
+            mime_type = self._get_mime_type(file)
+
+            if mime_type.startswith("text/"):
+                with open(file, "r", encoding="utf-8") as text_file:
+                    file_content = text_file.read()
+                enhanced_input = f"{input_text}\n\nFile content from {os.path.basename(file)}:\n```\n{file_content}\n```"
+                user_message = {"role": "user", "content": enhanced_input}
+            else:
+                # Handle image/binary file
+                with open(file, "rb") as image_file:
+                    encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+
+                user_message = {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": input_text},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{encoded_string}"
+                            },
+                        },
+                    ],
+                }
+        else:
+            # Text-only message
+            user_message = {"role": "user", "content": input_text}
+
         messages.append(user_message)
 
         # Store this message in memory if not clearing
@@ -641,3 +726,42 @@ class Agent:
                 self.memory.append(user_message)
 
         return messages
+
+    def _get_mime_type(self, file_path: str) -> str:
+        """
+        Determine the MIME type based on file extension.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            str: MIME type string for the file
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        mime_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".svg": "image/svg+xml",
+            ".pdf": "application/pdf",
+            ".txt": "text/plain",
+            ".md": "text/markdown",
+            ".py": "text/x-python",
+            ".js": "text/javascript",
+            ".html": "text/html",
+            ".css": "text/css",
+            ".json": "text/json",
+            ".csv": "text/csv",
+            ".xml": "text/xml",
+            ".yaml": "text/yaml",
+            ".yml": "text/yaml",
+            ".sh": "text/x-sh",
+            ".c": "text/x-c",
+            ".cpp": "text/x-c++",
+            ".h": "text/x-c",
+            ".java": "text/x-java",
+            ".rs": "text/x-rust",
+        }
+        return mime_types.get(ext, "application/octet-stream")
