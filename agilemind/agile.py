@@ -115,6 +115,7 @@ document_writer = Agent(
         get_tool("write_file"),
     ],
     generation_params=deterministic_generation,
+    multi_turn=True,
     **extract_agent_llm_config("documentation", config),
 )
 
