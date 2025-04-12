@@ -413,7 +413,7 @@ def implement_code(
             break
 
         round_count = 0
-        while round_count < max_iterations:
+        while round_count < min(max_iterations, 2):
             round_count += 1
 
             window.update_task(
