@@ -130,16 +130,16 @@ You are given the architecture design and the file list of a software repository
 Follow these steps:
 1. Read and understand the architecture design and the repository structure carefully.
 2. Use static code analysis tool ("run_static_analysis") to check the code quality.
-3. Instruct the developers to fix the bugs by calling "handoff_to_debugging_engineer" tool, providing the file path, bug description, and possible solutions if any. If there are no bugs, call "work_done" tool.
+3. Run the developed application (e.g. main.py for Python) to check if it works, using "run_application" tool.
+4. Instruct the developers to fix the bugs by calling "handoff_to_debugging_engineer" tool, providing the file path, bug description, and possible solutions if any. If there are no bugs, call "work_done" tool.
 
 Output:
 - If there are inconsistencies and/or potential bugs, hand off to the developer group by calling "handoff_to_debugging_engineer" tool (using correct parameters as it defined) to instruct the developers to fix.
-- If no inconsistencies are found, call "work_done" tool.
+- If no inconsistencies and/or bugs are found, call "work_done" tool.
 
 Note that:
-- Make sure all the files in the repository are checked and able to pass the static code analysis.
-- If you need to check multiple files, you should call "run_static_analysis" or other tools multiple times simultaneously in a single round of conversation.
 - For failed external libraries import statements, you should instruct the developers to fix them by adding them to the requirements file.
+- Make sure the main entry point file (e.g. main.py for Python) is runnable and no errors are thrown.
 """
 
 DEBUGGING = """

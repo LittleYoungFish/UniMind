@@ -1,6 +1,9 @@
 import os
 import json
+import time
 import shutil
+import signal
+import platform
 import subprocess
 from pathlib import Path
 from .tool_decorator import tool
@@ -10,6 +13,82 @@ from agilemind.checker import python_checkers, web_checkers
 
 
 class Tools:
+    @staticmethod
+    @tool("run_application", description="Run the application")
+    def run_application(
+        app_path: str = "main.py", cmd: str = "python", args: str = None
+    ) -> Dict[str, Any]:
+        """
+        Run the application
+
+        Args:
+            app_path: The path to the application to run (defaults to 'main.py')
+            cmd: The command to run the application (optional, defaults to 'python')
+            args: The arguments to pass to the application (optional, defaults to None)
+
+        Returns:
+            Dict containing success status, message, and output
+        """
+        try:
+            if not os.path.isfile(app_path):
+                return {
+                    "success": False,
+                    "message": f"Application file not found: {app_path}",
+                }
+
+            command = f"{cmd} {app_path}"
+            if args:
+                command += f" {args}"
+
+            is_windows = platform.system() == "Windows"
+            subp = subprocess.Popen(
+                command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                preexec_fn=os.setsid if not is_windows else None,
+            )
+
+            timeout = 3
+            start_time = time.time()
+            while subp.poll() is None and (time.time() - start_time) < timeout:
+                time.sleep(0.1)
+            retcode = subp.returncode
+
+            if subp.poll() is None:
+                try:
+                    if is_windows:
+                        os.kill(subp.pid, signal.SIGTERM)
+                    else:
+                        os.killpg(os.getpgid(subp.pid), signal.SIGTERM)
+                    time.sleep(0.5)
+                    if subp.poll() is None:
+                        os.kill(subp.pid, signal.SIGKILL)
+                except (ProcessLookupError, OSError, subprocess.SubprocessError):
+                    pass
+
+            stderr_output = subp.stderr.read().decode("utf-8")
+            if (
+                retcode == 0
+                or not stderr_output
+                or "traceback" not in stderr_output.lower()
+            ):
+                return {
+                    "success": True,
+                    "message": "Script test passed: Execution completed successfully",
+                }
+
+            current_dir = os.getcwd()
+            stderr_output = stderr_output.replace(current_dir, ".")
+            return {
+                "success": False,
+                "message": "Script test failed: Execution completed with errors",
+                "traceback": stderr_output,
+            }
+
+        except Exception as e:
+            return {"success": False, "message": f"App startup failed: {str(e)}"}
+
     @staticmethod
     @tool("work_done", description="Mark the task as done")
     def work_done() -> Dict[str, Any]:
@@ -246,6 +325,21 @@ class Tools:
                     f.write(f"{package_name}=={version}\n")
                 else:
                     f.write(f"{package_name}\n")
+
+            print(f'Info: Running "pip install {package_name}"')
+            subp = subprocess.Popen(
+                f"pip install {package_name}",
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            ret = subp.wait()
+            print(
+                f"Info: pip install {package_name} successfully"
+                if ret == 0
+                else "Error: " + subp.stdout.read().decode("utf-8")
+            )
+
             return {
                 "success": True,
                 "message": f"Added {package_name} to requirements.txt",
