@@ -2,12 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.1.0] - 2025-04-15
 
 ### Added
 
-- Added online visualization of the project using streamlit.
-- Added "interactive" mode for the script.
+- Added online visualization of the project and "interactive" mode for the script.
+- Added phases for documentation, code execution and testing.
+- Added multimodal input support (text file, image, etc.) as demand.
 
 ### Changed
 
