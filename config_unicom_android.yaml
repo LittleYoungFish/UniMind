@@ -1,0 +1,247 @@
+# 中国联通Android设备多智能体助手配置文件
+# China Unicom Android Multi-Agent Assistant Configuration
+
+# Android设备连接配置
+android_connection:
+  device_id: "9HTOC6AEHQYL4HAM"  # 用户需要提供设备序列号
+  adb_path: "adb"  # ADB工具路径
+  scrcpy_path: "scrcpy"  # Scrcpy工具路径
+  connection_timeout: 30
+  screenshot_path: "./screenshots/"
+  
+# 中国联通APP包名配置
+unicom_app_packages:
+  # 主要联通APP
+  unicom_app: "com.sinovatech.unicom.ui"  # 中国联通手机营业厅
+  unicom_payment: "com.unicompay.wallet"  # 联通支付/沃钱包
+  unicom_video: "com.unicom.video"  # 联通视频/沃视频
+  unicom_reading: "com.unicom.reading"  # 联通阅读/沃阅读
+  unicom_music: "com.unicom.music"  # 联通音乐/沃音乐
+  unicom_cloud: "com.unicom.cloud"  # 联通云盘/沃云
+  unicom_smart_home: "com.unicom.smarthome"  # 联通智慧家庭
+  unicom_assistant: "com.unicom.assistant"  # 联通助手/沃助手
+  
+  # 联通公众APP（一线工具）
+  unicom_public: "com.unicom.public"  # 联通公众APP
+  unicom_sales: "com.unicom.sales"  # 沃行销/掌沃通
+  
+  # 联通企业APP
+  unicom_enterprise: "com.unicom.enterprise"  # 联通企业版
+  unicom_iot: "com.unicom.iot"  # 联通物联网
+  
+# 工作流智能体配置
+workflow:
+  agents:
+    demand_analyzer:
+      model: "gpt-4o-mini"
+      temperature: 0.3
+      max_tokens: 2000
+      tools: ["android_connect", "android_get_screen_content"]
+      
+    unicom_app_identifier:
+      model: "gpt-4o-mini" 
+      temperature: 0.2
+      max_tokens: 1500
+      tools: ["android_find_element_by_text", "android_find_element_by_image", "android_launch_app"]
+      
+    ui_analyzer:
+      model: "gpt-4o-mini"
+      temperature: 0.1
+      max_tokens: 2000
+      tools: ["android_get_screen_content", "android_find_element_by_text", "android_find_element_by_image"]
+      
+    unicom_operator:
+      model: "gpt-4o-mini"
+      temperature: 0.2
+      max_tokens: 2000
+      tools: ["android_tap", "android_swipe", "android_input_text", "android_press_key", "android_get_screen_content"]
+      
+    operation_executor:
+      model: "gpt-4o-mini"
+      temperature: 0.1
+      max_tokens: 1500
+      tools: ["android_tap", "android_swipe", "android_input_text", "android_press_key", "android_launch_app", "android_close_app"]
+      
+    result_validator:
+      model: "gpt-4o-mini"
+      temperature: 0.1
+      max_tokens: 1500
+      tools: ["android_get_screen_content", "android_find_element_by_text"]
+      
+    monitor_feedback:
+      model: "gpt-4o-mini"
+      temperature: 0.3
+      max_tokens: 2000
+      tools: ["android_get_screen_content"]
+
+# 联通业务操作配置
+unicom_operations:
+  # 账户管理操作
+  account_management:
+    - name: "查询话费余额"
+      description: "查询当前账户话费余额"
+      app: "unicom_app"
+      keywords: ["话费", "余额", "账户"]
+      
+    - name: "查询流量使用情况"
+      description: "查询当前流量使用情况和剩余流量"
+      app: "unicom_app"
+      keywords: ["流量", "使用情况", "剩余"]
+      
+    - name: "充值缴费"
+      description: "进行话费充值或套餐缴费"
+      app: "unicom_app"
+      keywords: ["充值", "缴费", "支付"]
+      
+    - name: "查询账单详情"
+      description: "查询历史账单和消费详情"
+      app: "unicom_app"
+      keywords: ["账单", "消费", "详情"]
+  
+  # 套餐服务操作
+  package_services:
+    - name: "查询当前套餐"
+      description: "查看当前使用的套餐信息"
+      app: "unicom_app"
+      keywords: ["套餐", "当前", "信息"]
+      
+    - name: "办理新套餐"
+      description: "办理或更换新的套餐服务"
+      app: "unicom_app"
+      keywords: ["办理", "套餐", "更换"]
+      
+    - name: "查询优惠活动"
+      description: "查看当前可用的优惠活动"
+      app: "unicom_app"
+      keywords: ["优惠", "活动", "促销"]
+      
+    - name: "办理增值服务"
+      description: "办理各类增值服务"
+      app: "unicom_app"
+      keywords: ["增值", "服务", "办理"]
+  
+  # 网络服务操作
+  network_services:
+    - name: "宽带服务查询"
+      description: "查询宽带服务状态和信息"
+      app: "unicom_app"
+      keywords: ["宽带", "服务", "查询"]
+      
+    - name: "网络测速"
+      description: "进行网络速度测试"
+      app: "unicom_app"
+      keywords: ["测速", "网络", "速度"]
+      
+    - name: "故障报修"
+      description: "报告网络故障并申请维修"
+      app: "unicom_app"
+      keywords: ["故障", "报修", "维修"]
+      
+    - name: "网络设置"
+      description: "进行网络相关设置"
+      app: "unicom_app"
+      keywords: ["网络", "设置", "配置"]
+  
+  # 客户服务操作
+  customer_services:
+    - name: "在线客服"
+      description: "联系在线客服获得帮助"
+      app: "unicom_app"
+      keywords: ["客服", "帮助", "咨询"]
+      
+    - name: "投诉建议"
+      description: "提交投诉或建议"
+      app: "unicom_app"
+      keywords: ["投诉", "建议", "反馈"]
+      
+    - name: "服务评价"
+      description: "对服务进行评价"
+      app: "unicom_app"
+      keywords: ["评价", "服务", "满意度"]
+      
+    - name: "预约服务"
+      description: "预约线下服务或上门服务"
+      app: "unicom_app"
+      keywords: ["预约", "服务", "上门"]
+
+# 用户需求类型配置
+user_demand_types:
+  - type: "账户查询"
+    description: "查询账户相关信息，如话费、流量、账单等"
+    keywords: ["查询", "余额", "话费", "流量", "账单", "使用情况"]
+    priority: "high"
+    
+  - type: "充值缴费"
+    description: "进行话费充值、套餐缴费等支付操作"
+    keywords: ["充值", "缴费", "支付", "续费", "购买"]
+    priority: "high"
+    
+  - type: "套餐办理"
+    description: "办理、更换或查询套餐服务"
+    keywords: ["套餐", "办理", "更换", "升级", "降级"]
+    priority: "medium"
+    
+  - type: "网络服务"
+    description: "宽带、网络相关的查询和设置"
+    keywords: ["宽带", "网络", "测速", "故障", "报修"]
+    priority: "medium"
+    
+  - type: "增值服务"
+    description: "办理各类增值服务和优惠活动"
+    keywords: ["增值", "服务", "优惠", "活动", "会员"]
+    priority: "low"
+    
+  - type: "客户服务"
+    description: "客服咨询、投诉建议、服务预约等"
+    keywords: ["客服", "咨询", "投诉", "建议", "预约"]
+    priority: "medium"
+
+# UI自动化配置
+ui_automation:
+  # OCR配置
+  ocr:
+    engine: "pytesseract"
+    languages: ["chi_sim", "eng"]
+    config: "--psm 6"
+    
+  # 图像识别配置
+  image_recognition:
+    similarity_threshold: 0.8
+    template_matching_method: "cv2.TM_CCOEFF_NORMED"
+    
+  # 操作配置
+  operations:
+    tap_duration: 100
+    swipe_duration: 500
+    input_delay: 100
+    screenshot_delay: 1000
+    
+  # 等待配置
+  wait_times:
+    app_launch: 5
+    page_load: 3
+    element_appear: 2
+    network_request: 10
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/unicom_android_assistant.log"
+  max_size: "10MB"
+  backup_count: 5
+
+# 错误处理配置
+error_handling:
+  max_retries: 3
+  retry_delay: 2
+  timeout_seconds: 30
+  screenshot_on_error: true
+  
+# 安全配置
+security:
+  screenshot_retention_days: 7
+  log_retention_days: 30
+  mask_sensitive_info: true
+  sensitive_keywords: ["密码", "支付", "银行卡", "身份证"]
+

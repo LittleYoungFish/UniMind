@@ -73,7 +73,7 @@ def check_for_unclosed_tags(content: str) -> tuple[bool, int, int, str]:
         if opening_count > closing_count:
             unclosed_tags.add(tag_name)
     if unclosed_tags:
-        return (False, None, None, f"Unclosed HTML tag: {", ".join(unclosed_tags)}")
+        return (False, None, None, f"Unclosed HTML tag: {', '.join(unclosed_tags)}")
 
     # No unclosed tags found
     return (True, None, None, None)

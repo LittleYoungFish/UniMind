@@ -3,7 +3,7 @@ Tool group management and utilities for organizing tools into categories.
 """
 
 import inspect
-from tool import Tools
+from tools import Tools
 from typing import Dict, List, Set
 
 
