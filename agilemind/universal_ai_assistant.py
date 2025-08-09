@@ -529,7 +529,75 @@ async def run_universal_assistant(user_input: str, device_id: str = None, **kwar
 def universal_ai_assistant(user_input: str, device_id: str = None, **kwargs) -> Dict[str, Any]:
     """
     通用AI助手同步接口（兼容性）
+    现已集成真实的手机操作功能
     """
+    from datetime import datetime
+    from .tool.app_automation_tools import AppAutomationTools
+    
+    # 检查是否是话费查询相关请求
+    user_input_lower = user_input.lower()
+    is_balance_query = any(keyword in user_input_lower for keyword in [
+        '话费', '余额', '查询话费', '话费余额', '剩余话费', '查询余额'
+    ])
+    
+    if is_balance_query:
+        # 直接调用我们集成的话费查询功能
+        try:
+            tools = AppAutomationTools()
+            balance_result = tools.query_unicom_balance()
+            
+            if balance_result.get('success'):
+                return {
+                    "success": True,
+                    "user_input": user_input,
+                    "target_app": "中国联通",
+                    "execution_steps": 5,  # 设备连接、APP启动、按钮查找、点击操作、余额提取
+                    "user_response": f"话费查询成功！您的话费余额为 {balance_result['balance']}",
+                    "result": {
+                        "balance": balance_result['balance'], 
+                        "raw_amount": balance_result.get('raw_amount', 0),
+                        "confidence_score": balance_result.get('confidence_score', 0),
+                        "query_time": balance_result.get('query_time'),
+                        "duration_seconds": balance_result.get('duration_seconds', 0),
+                        "context": balance_result.get('context', '')
+                    },
+                    "operation_details": {
+                        "device_connected": True,
+                        "app_launched": True, 
+                        "balance_extracted": True,
+                        "real_operation": True  # 标记这是真实操作
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "success": False,
+                    "user_input": user_input,
+                    "target_app": "中国联通",
+                    "user_response": f"话费查询失败: {balance_result.get('message', '未知错误')}",
+                    "error": balance_result.get('message', '未知错误'),
+                    "operation_details": {
+                        "real_operation": True,
+                        "failure_reason": balance_result.get('message')
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "user_input": user_input,
+                "target_app": "中国联通",
+                "user_response": f"话费查询过程中发生异常: {str(e)}",
+                "error": str(e),
+                "operation_details": {
+                    "real_operation": True,
+                    "exception": str(e)
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    # 对于非话费查询的请求，使用原有的多智能体模拟系统
     import asyncio
     try:
         return asyncio.run(run_universal_assistant(user_input, device_id, **kwargs))

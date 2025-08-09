@@ -1147,3 +1147,402 @@ class AppAutomationTools:
                 "message": f"图像分析异常: {str(e)}",
                 "analysis": {}
             }
+
+    def smart_extract_balance(self, elements: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        智能提取剩余话费金额
+        通过语义分析和相邻元素关系找到真正的余额信息
+        
+        Args:
+            elements: UI元素列表
+            
+        Returns:
+            提取到的余额信息或None
+        """
+        import re
+        
+        balance_candidates = []
+        
+        # 遍历所有元素，查找金额
+        for i, elem in enumerate(elements):
+            text = elem.get('text', '').strip()
+            if not text:
+                continue
+                
+            # 方法1：查找包含完整金额的文本（如"66.60元"）
+            money_pattern = r'(\d+(?:\.\d{1,2})?)\s*[元￥¥]'
+            money_matches = re.findall(money_pattern, text)
+            
+            # 方法2：查找纯数字金额（如"66.60"），然后检查相邻元素
+            pure_number_pattern = r'^(\d+(?:\.\d{1,2})?)$'
+            pure_number_match = re.match(pure_number_pattern, text)
+            
+            # 处理完整金额文本
+            if money_matches:
+                for amount in money_matches:
+                    candidate = self._create_balance_candidate(amount, text, i, elements, "完整金额文本")
+                    balance_candidates.append(candidate)
+            
+            # 处理纯数字金额（重点改进部分）
+            elif pure_number_match:
+                amount = pure_number_match.group(1)
+                candidate = self._create_balance_candidate(amount, text, i, elements, "纯数字金额")
+                
+                # 检查相邻元素是否有货币符号
+                currency_bonus = 0
+                nearby_currency = []
+                for j in range(max(0, i-2), min(len(elements), i+3)):  # 检查前后2个元素
+                    if j != i and j < len(elements):
+                        neighbor_text = elements[j].get('text', '').strip()
+                        if neighbor_text in ['¥', '￥', '元']:
+                            currency_bonus = 80  # 高分奖励
+                            nearby_currency.append(f"相邻货币符号: {neighbor_text}")
+                            
+                candidate['context_score'] += currency_bonus
+                candidate['context'].extend(nearby_currency)
+                
+                # 特别检查：紧密相邻的"剩余话费"标题（重点加分）
+                title_proximity_bonus = 0
+                for j in range(max(0, i-3), i):  # 检查前3个元素
+                    if j < len(elements):
+                        neighbor_text = elements[j].get('text', '').strip().lower()
+                        if '剩余话费' in neighbor_text:
+                            distance = i - j
+                            if distance == 1:  # 紧挨着
+                                title_proximity_bonus = 200
+                                candidate['context'].append(f"紧挨着剩余话费标题(距离{distance})")
+                            elif distance == 2:  # 中间隔一个元素（可能是货币符号）
+                                title_proximity_bonus = 180
+                                candidate['context'].append(f"非常接近剩余话费标题(距离{distance})")
+                            elif distance == 3:
+                                title_proximity_bonus = 120
+                                candidate['context'].append(f"接近剩余话费标题(距离{distance})")
+                            break
+                
+                candidate['context_score'] += title_proximity_bonus
+                
+                # 检查是否在页面顶部位置（通过元素索引判断）
+                if i <= 15:  # 前15个元素认为是顶部
+                    candidate['context_score'] += 40
+                    candidate['context'].append("位于页面顶部区域")
+                
+                balance_candidates.append(candidate)
+        
+        # 按语义得分排序
+        balance_candidates.sort(key=lambda x: x['context_score'], reverse=True)
+        
+        # 输出分析结果
+        self.logger.info(f"🧠 智能分析找到 {len(balance_candidates)} 个金额候选")
+        for i, candidate in enumerate(balance_candidates[:5]):  # 显示前5个
+            self.logger.info(f"  {i+1}. {candidate['amount']} (得分: {candidate['context_score']})")
+            self.logger.info(f"     原文: {candidate['element_text']}")
+            self.logger.info(f"     元素位置: 第{candidate['element_index']+1}个")
+            self.logger.info(f"     上下文: {'; '.join(candidate['context'])}")
+        
+        # 返回得分最高的候选
+        if balance_candidates and balance_candidates[0]['context_score'] > 0:
+            best_candidate = balance_candidates[0]
+            return {
+                'amount': best_candidate['amount'],
+                'raw_amount': best_candidate['raw_amount'],
+                'context': best_candidate['element_text'],
+                'score': best_candidate['context_score']
+            }
+        
+        return None
+
+    def _create_balance_candidate(self, amount: str, text: str, element_index: int, elements: List[Dict[str, Any]], source_type: str) -> Dict[str, Any]:
+        """创建金额候选"""
+        candidate = {
+            'amount': f"{amount}元",
+            'raw_amount': float(amount),
+            'element_text': text,
+            'element_index': element_index,
+            'context_score': 0,
+            'context': [f"来源: {source_type}"]
+        }
+        
+        # 分析当前元素的语义上下文
+        text_lower = text.lower()
+        
+        # 高优先级关键词（明确表示余额）
+        high_priority_keywords = ['剩余', '余额', '可用', '账户余额', '话费余额', '当前余额']
+        for keyword in high_priority_keywords:
+            if keyword in text_lower:
+                candidate['context_score'] += 60
+                candidate['context'].append(f"包含关键词: {keyword}")
+        
+        # 中优先级关键词
+        medium_priority_keywords = ['话费', '余量', '当前']
+        for keyword in medium_priority_keywords:
+            if keyword in text_lower:
+                candidate['context_score'] += 30
+                candidate['context'].append(f"包含关键词: {keyword}")
+        
+        # 负面关键词（表示不是余额）
+        negative_keywords = ['充值', '缴费', '交费', '套餐', '售价', '优惠', '立即', '领取', '券', '福利', '不可使用', '暂不可使用']
+        for keyword in negative_keywords:
+            if keyword in text_lower:
+                candidate['context_score'] -= 50
+                candidate['context'].append(f"负面关键词: {keyword}")
+        
+        # 检查邻近元素的语义上下文（重点增强）
+        context_range = 3  # 检查前后3个元素
+        for j in range(max(0, element_index-context_range), min(len(elements), element_index+context_range+1)):
+            if j == element_index:
+                continue
+            if j < len(elements):
+                neighbor = elements[j]
+                neighbor_text = neighbor.get('text', '').strip().lower()
+                
+                # 高优先级邻近元素
+                if any(keyword in neighbor_text for keyword in high_priority_keywords):
+                    distance_bonus = max(30 - abs(j - element_index) * 10, 10)  # 距离越近分数越高
+                    candidate['context_score'] += distance_bonus
+                    candidate['context'].append(f"邻近关键元素(距离{abs(j-element_index)}): {neighbor_text}")
+                
+                # 中优先级邻近元素
+                elif any(keyword in neighbor_text for keyword in medium_priority_keywords):
+                    distance_bonus = max(20 - abs(j - element_index) * 5, 5)
+                    candidate['context_score'] += distance_bonus
+                    candidate['context'].append(f"邻近相关元素(距离{abs(j-element_index)}): {neighbor_text}")
+                
+                # 负面邻近元素
+                elif any(keyword in neighbor_text for keyword in negative_keywords):
+                    candidate['context_score'] -= 30
+                    candidate['context'].append(f"邻近负面元素: {neighbor_text}")
+        
+        # 金额合理性检查
+        if 0.01 <= candidate['raw_amount'] <= 9999:  # 合理的话费余额范围
+            candidate['context_score'] += 15
+            candidate['context'].append("金额在合理范围内")
+        else:
+            candidate['context_score'] -= 30
+            candidate['context'].append("金额可能不合理")
+        
+        return candidate
+
+    def _check_if_in_app(self, elements: List[Dict[str, Any]], app_name: str = "联通") -> bool:
+        """检查是否还在目标APP内"""
+        for elem in elements:
+            text = elem.get('text', '').lower()
+            if app_name.lower() in text or any(keyword in text for keyword in ['话费', '剩余', '流量', '语音']):
+                return True
+        return False
+
+    @tool(
+        "query_unicom_balance",
+        description="查询中国联通话费余额，集成了智能识别功能",
+        group="unicom_android"
+    )
+    def query_unicom_balance(self) -> Dict[str, Any]:
+        """
+        查询联通话费余额的完整流程
+        集成了修复后的设备连接、APP启动和智能余额识别功能
+        
+        Returns:
+            包含余额信息的字典
+        """
+        from datetime import datetime
+        
+        start_time = datetime.now()
+        self.logger.info("🎯 开始联通话费余额查询...")
+        
+        try:
+            # 1. 检查设备连接
+            self.logger.info("📱 1. 检查设备连接...")
+            try:
+                result = subprocess.run([self.adb_path, "devices"], capture_output=True, text=True, timeout=5)
+                if "device" in result.stdout and len(result.stdout.split('\n')) > 1:
+                    self.logger.info("✅ 设备连接正常")
+                else:
+                    return {
+                        "success": False,
+                        "message": "设备未连接",
+                        "query_time": str(datetime.now())
+                    }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"设备检查失败: {e}",
+                    "query_time": str(datetime.now())
+                }
+            
+            # 2. 直接启动联通APP
+            self.logger.info("🚀 2. 直接启动联通APP...")
+            try:
+                # 获取设备ID
+                device_result = subprocess.run([self.adb_path, "devices"], capture_output=True, text=True, timeout=5)
+                device_lines = device_result.stdout.strip().split('\n')[1:]  # 跳过第一行标题
+                device_id = None
+                for line in device_lines:
+                    if 'device' in line:
+                        device_id = line.split('\t')[0]
+                        break
+                
+                if device_id:
+                    self.logger.info(f"📱 检测到设备: {device_id}")
+                    # 使用monkey命令启动联通APP
+                    launch_cmd = [self.adb_path, "-s", device_id, "shell", "monkey", "-p", "com.sinovatech.unicom.ui", "-c", "android.intent.category.LAUNCHER", "1"]
+                    launch_result = subprocess.run(launch_cmd, capture_output=True, text=True, timeout=10)
+                    
+                    if launch_result.returncode == 0:
+                        self.logger.info("✅ 联通APP启动成功")
+                        time.sleep(5)  # 等待APP完全启动
+                    else:
+                        self.logger.info("🔄 尝试备用启动方案...")
+                        backup_cmd = [self.adb_path, "-s", device_id, "shell", "am", "start", "-n", "com.sinovatech.unicom.ui/.MainActivity"]
+                        backup_result = subprocess.run(backup_cmd, capture_output=True, text=True, timeout=10)
+                        if backup_result.returncode == 0:
+                            self.logger.info("✅ 备用方案启动成功")
+                            time.sleep(5)
+                        else:
+                            return {
+                                "success": False,
+                                "message": f"APP启动失败: {backup_result.stderr}",
+                                "query_time": str(datetime.now())
+                            }
+                else:
+                    return {
+                        "success": False,
+                        "message": "未检测到设备",
+                        "query_time": str(datetime.now())
+                    }
+                        
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"启动APP时出错: {e}",
+                    "query_time": str(datetime.now())
+                }
+            
+            # 3. 检查是否成功进入APP
+            self.logger.info("📋 3. 检查APP是否已启动...")
+            new_elements = self.find_elements()
+            if new_elements.get('success'):
+                new_elem_list = new_elements.get('elements', [])
+                self.logger.info(f"✅ 新界面有 {len(new_elem_list)} 个元素")
+                
+                # 检查是否在APP内
+                if self._check_if_in_app(new_elem_list):
+                    self.logger.info("✅ 确认已进入联通APP")
+                    
+                    # 查找话费查询相关按钮
+                    self.logger.info("🔍 4. 查找话费查询按钮...")
+                    balance_buttons = []
+                    
+                    for elem in new_elem_list:
+                        text = elem.get('text', '').strip()
+                        text_lower = text.lower()
+                        
+                        # 精确匹配话费相关按钮
+                        if any(keyword in text_lower for keyword in ['剩余话费', '话费余额', '余额', '账户余额']):
+                            if '流量' not in text_lower and '语音' not in text_lower:  # 排除流量和语音
+                                balance_buttons.append(elem)
+                                self.logger.info(f"  🎯 找到话费按钮: {text} - 位置{elem['bounds']}")
+                    
+                    if balance_buttons:
+                        self.logger.info(f"🎯 找到 {len(balance_buttons)} 个话费按钮")
+                        # 选择最合适的按钮
+                        best_button = balance_buttons[0]
+                        self.logger.info(f"🔥 准备点击: {best_button['text']}")
+                        
+                        # 获取点击前的截图
+                        self.logger.info("📸 点击前截图...")
+                        self.capture_screenshot()
+                        
+                        # 精确点击，避免滑动
+                        self.logger.info(f"🎯 精确点击位置: ({best_button['center_x']}, {best_button['center_y']})")
+                        tap_result2 = self.tap_element(best_button['center_x'], best_button['center_y'])
+                        
+                        if tap_result2.get('success'):
+                            self.logger.info("✅ 话费按钮点击成功")
+                            
+                            # 等待界面响应
+                            self.logger.info("⏳ 等待界面加载...")
+                            time.sleep(4)
+                            
+                            # 获取点击后的截图
+                            self.logger.info("📸 点击后截图...")
+                            self.capture_screenshot()
+                            
+                            # 检查是否还在APP内
+                            self.logger.info("🔍 5. 检查点击后的界面状态...")
+                            final_elements = self.find_elements()
+                            if final_elements.get('success'):
+                                final_elem_list = final_elements.get('elements', [])
+                                self.logger.info(f"✅ 当前界面有 {len(final_elem_list)} 个元素")
+                                
+                                # 检查是否还在APP内
+                                if self._check_if_in_app(final_elem_list):
+                                    self.logger.info("✅ 确认还在APP内，开始查找话费信息...")
+                                    
+                                    # 智能识别剩余话费
+                                    balance_result = self.smart_extract_balance(final_elem_list)
+                                    if balance_result:
+                                        end_time = datetime.now()
+                                        duration = (end_time - start_time).total_seconds()
+                                        
+                                        result = {
+                                            "success": True,
+                                            "balance": balance_result['amount'],
+                                            "raw_amount": balance_result['raw_amount'],
+                                            "context": balance_result['context'],
+                                            "confidence_score": balance_result['score'],
+                                            "query_time": str(end_time),
+                                            "duration_seconds": duration,
+                                            "message": f"成功查询话费余额: {balance_result['amount']}"
+                                        }
+                                        self.logger.info(f"🎉 成功查询话费余额: {balance_result['amount']}")
+                                        return result
+                                    else:
+                                        return {
+                                            "success": False,
+                                            "message": "未能智能识别剩余话费",
+                                            "available_elements": [elem.get('text', '') for elem in final_elem_list[:10] if elem.get('text', '').strip()],
+                                            "query_time": str(datetime.now())
+                                        }
+                                else:
+                                    return {
+                                        "success": False,
+                                        "message": "应用已退出，点击操作可能触发了意外行为",
+                                        "query_time": str(datetime.now())
+                                    }
+                            else:
+                                return {
+                                    "success": False,
+                                    "message": "获取点击后界面失败",
+                                    "query_time": str(datetime.now())
+                                }
+                        else:
+                            return {
+                                "success": False,
+                                "message": "话费按钮点击失败",
+                                "query_time": str(datetime.now())
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "message": "未找到话费查询按钮",
+                            "available_texts": [elem.get('text', '') for elem in new_elem_list[:10] if elem.get('text', '').strip()],
+                            "query_time": str(datetime.now())
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "message": "未成功进入APP，可能启动失败",
+                        "query_time": str(datetime.now())
+                    }
+            else:
+                return {
+                    "success": False,
+                    "message": "获取APP启动后界面失败",
+                    "query_time": str(datetime.now())
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"查询过程中发生异常: {str(e)}",
+                "query_time": str(datetime.now())
+            }
