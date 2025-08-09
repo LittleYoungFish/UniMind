@@ -50,8 +50,42 @@ class Executor:
         if not self.config.api_key:
             raise ValueError("API key is required")
 
+        # 配置代理设置
+        import httpx
+        import os
+        
+        # 获取代理配置
+        http_proxy = os.getenv("HTTP_PROXY") or os.getenv("http_proxy")
+        https_proxy = os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
+        
+        # 创建HTTP客户端（支持代理）
+        http_client = None
+        if http_proxy or https_proxy:
+            # 优先使用http代理，避免SSL协议问题
+            proxy_url = http_proxy or https_proxy
+            
+            # 确保代理URL使用http协议
+            if proxy_url and proxy_url.startswith('https://'):
+                proxy_url = proxy_url.replace('https://', 'http://')
+            
+            try:
+                http_client = httpx.Client(
+                    proxy=proxy_url,
+                    timeout=60.0,
+                    follow_redirects=True,
+                    verify=False  # 跳过SSL验证以避免代理SSL问题
+                )
+            except Exception as e:
+                # 如果代理失败，使用直连
+                print(f"代理设置失败，使用直连: {e}")
+                http_client = None
+        
         # Initialize OpenAI client
-        self.client = OpenAI(api_key=self.config.api_key, base_url=self.config.base_url)
+        self.client = OpenAI(
+            api_key=self.config.api_key, 
+            base_url=self.config.base_url,
+            http_client=http_client
+        )
 
     @classmethod
     def from_env(cls) -> "Executor":

@@ -1,0 +1,26 @@
+# OpenAI API配置
+# OpenAI API Configuration
+
+# 必需：OpenAI API密钥 (Required: OpenAI API Key)
+# 从 https://platform.openai.com/api-keys 获取
+OPENAI_API_KEY=your_openai_api_key_here
+
+# 可选：自定义API基础URL (Optional: Custom API Base URL)
+# 如果使用官方OpenAI API，可以留空或删除此行
+# 如果使用代理或其他兼容API，请设置相应的URL
+# OPENAI_BASE_URL=https://api.openai.com/v1
+
+# 可选：默认模型 (Optional: Default Model)
+AM_DEFAULT_MODEL=gpt-4o-mini
+
+# 可选：生成参数 (Optional: Generation Parameters)
+AM_MAX_TOKENS=4096
+AM_TEMPERATURE=0.7
+AM_TOP_P=1.0
+
+# 使用说明：
+# 1. 将此文件重命名为 .env 
+# 2. 填入您的真实API密钥
+# 3. 根据需要调整其他参数
+# 4. 重新启动应用程序
+

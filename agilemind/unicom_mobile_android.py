@@ -96,90 +96,85 @@ class UnicomMobileAndroidAssistant:
         # 需求分析智能体
         agents["demand_analyzer"] = Agent(
             name="需求分析智能体",
-            prompt=DEMAND_ANALYZER,
+            description="分析用户需求，确定联通业务操作目标",
+            instructions=DEMAND_ANALYZER,
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("demand_analyzer", {}).get("model", "gpt-4o-mini"),
-            temperature=agent_configs.get("demand_analyzer", {}).get("temperature", 0.3),
-            tools=[
-                self.unicom_tools.unicom_android_connect,
-                self.unicom_tools.unicom_get_screen_content
-            ]
+            generation_params={
+                "temperature": agent_configs.get("demand_analyzer", {}).get("temperature", 0.3)
+            }
         )
         
         # APP识别智能体
         agents["app_identifier"] = Agent(
             name="APP识别智能体", 
-            prompt=APP_IDENTIFIER,
+            description="识别和启动目标联通APP",
+            instructions=APP_IDENTIFIER,
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("app_identifier", {}).get("model", "gpt-4o-mini"),
-            temperature=agent_configs.get("app_identifier", {}).get("temperature", 0.2),
-            tools=[
-                self.unicom_tools.unicom_launch_app,
-                self.unicom_tools.unicom_get_app_status,
-                self.unicom_tools.unicom_android_connect
-            ]
+            generation_params={
+                "temperature": agent_configs.get("app_identifier", {}).get("temperature", 0.2)
+            }
         )
         
         # UI界面分析智能体
         agents["ui_analyzer"] = Agent(
             name="UI界面分析智能体",
-            prompt=UI_ANALYZER, 
+            description="分析APP界面内容和元素",
+            instructions=UI_ANALYZER, 
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("ui_analyzer", {}).get("model", "gpt-4o-mini"),
-            temperature=agent_configs.get("ui_analyzer", {}).get("temperature", 0.1),
-            tools=[
-                self.unicom_tools.unicom_get_screen_content,
-                self.unicom_tools.unicom_find_element_by_text
-            ]
+            generation_params={
+                "temperature": agent_configs.get("ui_analyzer", {}).get("temperature", 0.1)
+            }
         )
         
         # 联通操作智能体
         agents["unicom_operator"] = Agent(
             name="联通操作智能体",
-            prompt=UNICOM_OPERATOR,
+            description="执行联通业务相关操作",
+            instructions=UNICOM_OPERATOR,
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("unicom_operator", {}).get("model", "gpt-4o-mini"), 
-            temperature=agent_configs.get("unicom_operator", {}).get("temperature", 0.2),
-            tools=[
-                self.unicom_tools.unicom_tap_element,
-                self.unicom_tools.unicom_input_text,
-                self.unicom_tools.unicom_perform_operation,
-                self.unicom_tools.unicom_get_screen_content
-            ]
+            generation_params={
+                "temperature": agent_configs.get("unicom_operator", {}).get("temperature", 0.2)
+            }
         )
         
         # 操作执行智能体
         agents["operation_executor"] = Agent(
             name="操作执行智能体",
-            prompt=OPERATION_EXECUTOR,
+            description="执行具体的设备操作",
+            instructions=OPERATION_EXECUTOR,
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("operation_executor", {}).get("model", "gpt-4o-mini"),
-            temperature=agent_configs.get("operation_executor", {}).get("temperature", 0.1),
-            tools=[
-                self.unicom_tools.unicom_tap_element,
-                self.unicom_tools.unicom_input_text,
-                self.unicom_tools.unicom_get_screen_content,
-                self.unicom_tools.unicom_launch_app,
-                self.unicom_tools.unicom_close_app
-            ]
+            generation_params={
+                "temperature": agent_configs.get("operation_executor", {}).get("temperature", 0.1)
+            }
         )
         
         # 结果验证智能体
         agents["result_validator"] = Agent(
             name="结果验证智能体",
-            prompt=RESULT_VALIDATOR,
+            description="验证操作结果是否正确",
+            instructions=RESULT_VALIDATOR,
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("result_validator", {}).get("model", "gpt-4o-mini"),
-            temperature=agent_configs.get("result_validator", {}).get("temperature", 0.1),
-            tools=[
-                self.unicom_tools.unicom_get_screen_content,
-                self.unicom_tools.unicom_find_element_by_text
-            ]
+            generation_params={
+                "temperature": agent_configs.get("result_validator", {}).get("temperature", 0.1)
+            }
         )
         
         # 监控反馈智能体
         agents["monitor_feedback"] = Agent(
             name="监控反馈智能体",
-            prompt=MONITOR_FEEDBACK,
+            description="监控系统状态并提供反馈",
+            instructions=MONITOR_FEEDBACK,
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("monitor_feedback", {}).get("model", "gpt-4o-mini"),
-            temperature=agent_configs.get("monitor_feedback", {}).get("temperature", 0.3),
-            tools=[
-                self.unicom_tools.unicom_get_screen_content
-            ]
+            generation_params={
+                "temperature": agent_configs.get("monitor_feedback", {}).get("temperature", 0.3)
+            }
         )
         
         return agents

@@ -57,10 +57,19 @@ class AppAutomationTools:
     
     def __init__(self):
         """初始化工具类"""
+        global HAS_SPEECH
         self.logger = logging.getLogger(__name__)
         self.device_id = None
         self.screenshot_dir = "screenshots"
         os.makedirs(self.screenshot_dir, exist_ok=True)
+        
+        # 初始化ADB路径
+        try:
+            self.adb_path = self._find_adb_path()
+            self.logger.info(f"ADB路径已找到: {self.adb_path}")
+        except FileNotFoundError as e:
+            self.logger.error(f"ADB初始化失败: {str(e)}")
+            raise
         
         # 初始化语音引擎（如果可用）
         if HAS_SPEECH:
@@ -75,32 +84,85 @@ class AppAutomationTools:
     def _find_adb_path(self) -> str:
         """查找ADB工具路径"""
         import os
-        adb_paths = [
-            "adb",  # 系统PATH中的adb
-            r"C:\Users\%USERNAME%\AppData\Local\Android\Sdk\platform-tools\adb.exe",  # Windows默认路径
-            r"C:\Program Files\Android\Android Studio\Sdk\platform-tools\adb.exe",
-            r"C:\Android\Sdk\platform-tools\adb.exe",
-            os.path.expanduser("~/AppData/Local/Android/Sdk/platform-tools/adb.exe"),
-            os.path.expanduser("~/Library/Android/sdk/platform-tools/adb"),  # macOS
-            "/usr/local/bin/adb",  # Linux
-            "/opt/android-sdk/platform-tools/adb"
-        ]
         
-        for path in adb_paths:
+        # 首先检查环境变量中的自定义路径
+        custom_adb = os.environ.get('ADB_PATH')
+        if custom_adb and os.path.exists(custom_adb):
             try:
-                expanded_path = os.path.expandvars(path)
                 result = subprocess.run(
-                    [expanded_path, "version"], 
+                    [custom_adb, "version"], 
                     capture_output=True, 
                     text=True, 
                     timeout=5
                 )
                 if result.returncode == 0:
-                    return expanded_path
+                    return custom_adb
             except:
+                pass
+        
+        adb_paths = [
+            "adb",  # 系统PATH中的adb
+            "adb.exe",  # Windows系统PATH中
+            # Windows常用路径
+            r"C:\Users\%USERNAME%\AppData\Local\Android\Sdk\platform-tools\adb.exe",
+            r"C:\Program Files\Android\Android Studio\Sdk\platform-tools\adb.exe", 
+            r"C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe",
+            r"C:\Android\Sdk\platform-tools\adb.exe",
+            r"C:\tools\android-platform-tools\adb.exe",  # Scoop安装路径
+            r"C:\ProgramData\chocolatey\lib\adb\tools\adb.exe",  # Chocolatey安装路径
+            # 用户目录
+            os.path.expanduser("~/AppData/Local/Android/Sdk/platform-tools/adb.exe"),
+            os.path.expanduser("~/scoop/apps/adb/current/adb.exe"),  # Scoop用户安装
+            # macOS路径
+            os.path.expanduser("~/Library/Android/sdk/platform-tools/adb"),
+            "/usr/local/bin/adb",
+            # Linux路径
+            "/usr/bin/adb",
+            "/opt/android-sdk/platform-tools/adb",
+            # 当前目录下的相对路径
+            "./platform-tools/adb.exe",
+            "./adb.exe"
+        ]
+        
+        for path in adb_paths:
+            try:
+                expanded_path = os.path.expandvars(path)
+                if os.path.exists(expanded_path):
+                    result = subprocess.run(
+                        [expanded_path, "version"], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        self.logger.info(f"找到ADB工具: {expanded_path}")
+                        return expanded_path
+            except Exception as e:
+                self.logger.debug(f"尝试路径 {path} 失败: {e}")
                 continue
         
-        raise FileNotFoundError("未找到ADB工具，请确保Android SDK已正确安装")
+        # 如果都找不到，提供详细的错误信息和解决方案
+        error_msg = """
+未找到ADB工具！请选择以下解决方案之一：
+
+1. 下载Android Platform Tools:
+   - 访问: https://developer.android.com/studio/releases/platform-tools
+   - 下载并解压到任意目录
+   - 设置环境变量 ADB_PATH 指向 adb.exe 文件
+   
+2. 通过包管理器安装:
+   - Scoop: scoop install adb
+   - Chocolatey: choco install adb
+   
+3. 手动设置环境变量:
+   - 设置 ADB_PATH 环境变量指向您的 adb.exe 文件路径
+   
+4. 将adb.exe放到项目目录下
+
+当前搜索的路径包括: {}
+""".format('\n  '.join([f"- {path}" for path in adb_paths[:10]]))
+        
+        raise FileNotFoundError(error_msg)
 
     @tool
     def get_installed_apps(self, device_id: str = None) -> Dict[str, Any]:
@@ -114,7 +176,7 @@ class AppAutomationTools:
             包含已安装应用信息的字典
         """
         try:
-            adb_cmd = self._find_adb_path()
+            adb_cmd = self.adb_path
             device_args = ["-s", device_id] if device_id else []
             
             result = subprocess.run(
@@ -165,7 +227,7 @@ class AppAutomationTools:
             应用状态信息
         """
         try:
-            adb_cmd = self._find_adb_path()
+            adb_cmd = self.adb_path
             device_args = ["-s", device_id] if device_id else []
             
             # 检查应用是否安装
@@ -226,12 +288,14 @@ class AppAutomationTools:
         try:
             device_param = f"-s {device_id}" if device_id else ""
             
+            # 使用找到的ADB路径
+            adb_path = self.adb_path
             if activity:
                 # 启动指定Activity
-                cmd = f"adb {device_param} shell am start -n {package_name}/{activity}"
+                cmd = f'"{adb_path}" {device_param} shell am start -n {package_name}/{activity}'
             else:
                 # 启动主Activity
-                cmd = f"adb {device_param} shell monkey -p {package_name} -c android.intent.category.LAUNCHER 1"
+                cmd = f'"{adb_path}" {device_param} shell monkey -p {package_name} -c android.intent.category.LAUNCHER 1'
             
             result = subprocess.run(
                 cmd, shell=True, capture_output=True, text=True, timeout=15
@@ -278,25 +342,50 @@ class AppAutomationTools:
             屏幕内容信息
         """
         try:
-            device_param = f"-s {device_id}" if device_id else ""
             timestamp = int(time.time())
             screenshot_path = os.path.join(self.screenshot_dir, f"screen_{timestamp}.png")
             
-            # 截取屏幕
-            cmd = f"adb {device_param} exec-out screencap -p > {screenshot_path}"
-            result = subprocess.run(cmd, shell=True, timeout=10)
+            # 使用列表参数执行截屏命令
+            adb_path = self.adb_path
+            cmd_args = [adb_path]
             
-            if result.returncode != 0:
+            if device_id:
+                cmd_args.extend(["-s", device_id])
+            
+            cmd_args.extend(["exec-out", "screencap", "-p"])
+            
+            # 执行截屏命令并将输出写入文件
+            try:
+                with open(screenshot_path, 'wb') as f:
+                    result = subprocess.run(cmd_args, stdout=f, timeout=15, stderr=subprocess.PIPE)
+                
+                if result.returncode != 0:
+                    return {
+                        "success": False,
+                        "message": f"截屏失败: {result.stderr.decode()}",
+                        "content": {}
+                    }
+                
+                # 检查文件是否成功创建
+                if not os.path.exists(screenshot_path) or os.path.getsize(screenshot_path) == 0:
+                    return {
+                        "success": False,
+                        "message": "截屏文件创建失败或为空",
+                        "content": {}
+                    }
+                
+            except Exception as e:
                 return {
                     "success": False,
-                    "message": "截屏失败",
+                    "message": f"截屏命令执行失败: {str(e)}",
                     "content": {}
                 }
             
             screen_info = {
                 "screenshot_path": screenshot_path,
                 "timestamp": timestamp,
-                "device_id": device_id or "default"
+                "device_id": device_id or "default",
+                "file_size": os.path.getsize(screenshot_path)
             }
             
             # 如果需要OCR识别且依赖可用
@@ -327,6 +416,34 @@ class AppAutomationTools:
                 "content": {}
             }
     
+    def _ensure_screen_awake(self, device_id: str = None) -> bool:
+        """确保屏幕已唤醒并解锁"""
+        try:
+            adb_path = self.adb_path
+            cmd_args = [adb_path]
+            
+            if device_id:
+                cmd_args.extend(["-s", device_id])
+            
+            # 1. 唤醒屏幕
+            wake_cmd = cmd_args + ["shell", "input", "keyevent", "KEYCODE_WAKEUP"]
+            subprocess.run(wake_cmd, timeout=5, capture_output=True)
+            
+            # 2. 滑动解锁（简单滑动，适用于无密码锁屏）
+            unlock_cmd = cmd_args + ["shell", "input", "swipe", "500", "1500", "500", "500", "500"]
+            subprocess.run(unlock_cmd, timeout=5, capture_output=True)
+            
+            # 3. 按Home键确保回到桌面
+            home_cmd = cmd_args + ["shell", "input", "keyevent", "KEYCODE_HOME"]
+            subprocess.run(home_cmd, timeout=5, capture_output=True)
+            
+            time.sleep(1)  # 等待界面稳定
+            return True
+            
+        except Exception as e:
+            self.logger.warning(f"屏幕唤醒失败: {e}")
+            return False
+
     @tool
     def find_elements(self, text: str = None, description: str = None, device_id: str = None) -> Dict[str, Any]:
         """
@@ -340,46 +457,153 @@ class AppAutomationTools:
         Returns:
             查找结果
         """
-        try:
-            device_param = f"-s {device_id}" if device_id else ""
-            
-            # 获取UI层次结构
-            cmd = f"adb {device_param} shell uiautomator dump /sdcard/ui_dump.xml"
-            subprocess.run(cmd, shell=True, timeout=10)
-            
-            # 拉取UI结构文件
-            pull_cmd = f"adb {device_param} pull /sdcard/ui_dump.xml ."
-            subprocess.run(pull_cmd, shell=True, timeout=5)
-            
-            # 解析UI结构（简化版本）
-            found_elements = []
-            
-            if os.path.exists("ui_dump.xml"):
-                with open("ui_dump.xml", 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    
-                    # 简单的元素查找逻辑
-                    if text:
-                        if text in content:
-                            found_elements.append({
-                                "type": "text_match",
-                                "content": text,
-                                "found": True
-                            })
-                    
-                # 清理临时文件
-                os.remove("ui_dump.xml")
-            
-            return {
-                "success": True,
-                "message": f"元素查找完成，找到 {len(found_elements)} 个匹配项",
-                "elements": found_elements,
-                "search_criteria": {
-                    "text": text,
-                    "description": description
+        def _get_ui_elements(retry_count: int = 0) -> Dict[str, Any]:
+            """内部函数：获取UI元素，支持重试"""
+            try:
+                # 使用列表参数执行ADB命令
+                adb_path = self.adb_path
+                
+                # 构建命令参数
+                dump_cmd = [adb_path]
+                if device_id:
+                    dump_cmd.extend(["-s", device_id])
+                dump_cmd.extend(["shell", "uiautomator", "dump", "/sdcard/ui_dump.xml"])
+                
+                # 执行UI dump命令
+                result = subprocess.run(dump_cmd, timeout=15, capture_output=True, text=True)
+                if result.returncode != 0:
+                    return {
+                        "success": False,
+                        "message": f"UI dump失败: {result.stderr}",
+                        "elements": []
+                    }
+                
+                # 拉取UI结构文件
+                pull_cmd = [adb_path]
+                if device_id:
+                    pull_cmd.extend(["-s", device_id])
+                pull_cmd.extend(["pull", "/sdcard/ui_dump.xml", "."])
+                
+                result = subprocess.run(pull_cmd, timeout=10, capture_output=True, text=True)
+                if result.returncode != 0:
+                    return {
+                        "success": False,
+                        "message": f"UI文件拉取失败: {result.stderr}",
+                        "elements": []
+                    }
+                
+                # 解析UI结构（检查多个可能的文件名）
+                found_elements = []
+                ui_file = None
+                
+                # 检查可能的文件名（处理扩展名截断问题）
+                for filename in ["ui_dump.xml", "ui_dump.xm"]:
+                    if os.path.exists(filename):
+                        ui_file = filename
+                        break
+                
+                if ui_file:
+                    try:
+                        with open(ui_file, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            
+                            # 解析所有有用的UI元素
+                            import re
+                            import xml.etree.ElementTree as ET
+                            
+                            try:
+                                root = ET.fromstring(content)
+                                all_nodes = root.findall('.//node')
+                                
+                                for node in all_nodes:
+                                    node_text = node.get('text', '').strip()
+                                    content_desc = node.get('content-desc', '').strip()
+                                    bounds = node.get('bounds', '')
+                                    clickable = node.get('clickable', 'false')
+                                    
+                                    # 只处理有效的UI元素
+                                    if bounds and bounds != '[0,0][0,0]':
+                                        # 解析坐标
+                                        coord_match = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', bounds)
+                                        if coord_match:
+                                            x1, y1, x2, y2 = map(int, coord_match.groups())
+                                            
+                                            # 有文本、描述或可点击的元素
+                                            if node_text or content_desc or clickable == 'true':
+                                                display_text = node_text or content_desc or f"可点击元素[{x1},{y1}]"
+                                                found_elements.append({
+                                                    "text": display_text,
+                                                    "bounds": bounds,
+                                                    "center_x": int((x1 + x2) / 2),
+                                                    "center_y": int((y1 + y2) / 2),
+                                                    "clickable": clickable == 'true',
+                                                    "raw_text": node_text,
+                                                    "content_desc": content_desc
+                                                })
+                                
+                            except ET.ParseError:
+                                # 如果XML解析失败，使用正则表达式
+                                node_pattern = r'<node[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*/?>'
+                                matches = re.findall(node_pattern, content)
+                                for match in matches:
+                                    x1, y1, x2, y2 = map(int, match)
+                                    if (x1, y1, x2, y2) != (0, 0, 0, 0):
+                                        found_elements.append({
+                                            "text": f"UI元素[{x1},{y1}]",
+                                            "bounds": f"[{x1},{y1}][{x2},{y2}]",
+                                            "center_x": int((x1 + x2) / 2),
+                                            "center_y": int((y1 + y2) / 2),
+                                            "clickable": True
+                                        })
+                            
+                            # 如果指定了搜索文本，进行筛选
+                            if text:
+                                filtered_elements = []
+                                for elem in found_elements:
+                                    if (text.lower() in elem["text"].lower() or 
+                                        text.lower() in elem.get("raw_text", "").lower() or
+                                        text.lower() in elem.get("content_desc", "").lower()):
+                                        filtered_elements.append(elem)
+                                found_elements = filtered_elements
+                            
+                    except Exception as e:
+                        self.logger.error(f"解析UI文件失败: {e}")
+                        
+                    # 清理临时文件
+                    try:
+                        os.remove(ui_file)
+                    except:
+                        pass
+                        
+                    # 如果没找到元素且是第一次尝试，可能需要唤醒屏幕
+                    if len(found_elements) <= 1 and retry_count == 0:
+                        self.logger.info("UI元素较少，可能屏幕锁定，尝试唤醒屏幕...")
+                        if self._ensure_screen_awake(device_id):
+                            time.sleep(2)  # 等待界面稳定
+                            return _get_ui_elements(retry_count + 1)  # 重试
+                else:
+                    self.logger.warning("未找到UI dump文件")
+                
+                return {
+                    "success": True,
+                    "message": f"元素查找完成，找到 {len(found_elements)} 个匹配项",
+                    "elements": found_elements,
+                    "search_criteria": {
+                        "text": text,
+                        "description": description
+                    }
                 }
-            }
-            
+                
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"UI元素获取失败: {str(e)}",
+                    "elements": []
+                }
+        
+        # 执行UI元素获取
+        try:
+            return _get_ui_elements()
         except Exception as e:
             return {
                 "success": False,
@@ -401,21 +625,30 @@ class AppAutomationTools:
             点击结果
         """
         try:
-            device_param = f"-s {device_id}" if device_id else ""
-            cmd = f"adb {device_param} shell input tap {x} {y}"
+            # 使用找到的ADB路径和列表参数（避免shell问题）
+            adb_path = self.adb_path
+            cmd_args = [adb_path]
             
-            result = subprocess.run(cmd, shell=True, timeout=5)
+            if device_id:
+                cmd_args.extend(["-s", device_id])
+            
+            cmd_args.extend(["shell", "input", "tap", str(x), str(y)])
+            
+            self.logger.info(f"执行点击命令: {' '.join(cmd_args)}")
+            result = subprocess.run(cmd_args, timeout=10, capture_output=True, text=True)
             
             if result.returncode != 0:
+                self.logger.error(f"ADB命令失败: {result.stderr}")
                 return {
                     "success": False,
-                    "message": f"点击操作失败",
+                    "message": f"点击操作失败: {result.stderr}",
                     "coordinates": (x, y)
                 }
             
             # 等待操作响应
-            time.sleep(1)
+            time.sleep(0.5)
             
+            self.logger.info(f"成功执行点击操作 ({x}, {y})")
             return {
                 "success": True,
                 "message": f"成功点击坐标 ({x}, {y})",
@@ -424,6 +657,7 @@ class AppAutomationTools:
             }
             
         except Exception as e:
+            self.logger.error(f"点击操作异常: {str(e)}")
             return {
                 "success": False,
                 "message": f"点击操作异常: {str(e)}",
@@ -447,7 +681,8 @@ class AppAutomationTools:
             
             # 转义特殊字符
             escaped_text = text.replace(' ', '%s').replace('&', '\\&')
-            cmd = f"adb {device_param} shell input text \"{escaped_text}\""
+            adb_path = self.adb_path
+            cmd = f'"{adb_path}" {device_param} shell input text "{escaped_text}"'
             
             result = subprocess.run(cmd, shell=True, timeout=10)
             
@@ -492,7 +727,8 @@ class AppAutomationTools:
         """
         try:
             device_param = f"-s {device_id}" if device_id else ""
-            cmd = f"adb {device_param} shell input swipe {start_x} {start_y} {end_x} {end_y} {duration}"
+            adb_path = self.adb_path
+            cmd = f'"{adb_path}" {device_param} shell input swipe {start_x} {start_y} {end_x} {end_y} {duration}'
             
             result = subprocess.run(cmd, shell=True, timeout=10)
             
@@ -558,7 +794,8 @@ class AppAutomationTools:
             }
             
             key_value = key_mapping.get(key_code.lower(), key_code)
-            cmd = f"adb {device_param} shell input keyevent {key_value}"
+            adb_path = self.adb_path
+            cmd = f'"{adb_path}" {device_param} shell input keyevent {key_value}'
             
             result = subprocess.run(cmd, shell=True, timeout=5)
             
@@ -599,7 +836,8 @@ class AppAutomationTools:
         """
         try:
             device_param = f"-s {device_id}" if device_id else ""
-            cmd = f"adb {device_param} shell input swipe {x} {y} {x} {y} {duration}"
+            adb_path = self.adb_path
+            cmd = f'"{adb_path}" {device_param} shell input swipe {x} {y} {x} {y} {duration}'
             
             result = subprocess.run(cmd, shell=True, timeout=15)
             
@@ -646,7 +884,8 @@ class AppAutomationTools:
             screenshot_path = os.path.join(self.screenshot_dir, filename)
             device_param = f"-s {device_id}" if device_id else ""
             
-            cmd = f"adb {device_param} exec-out screencap -p > {screenshot_path}"
+            adb_path = self.adb_path
+            cmd = f'"{adb_path}" {device_param} exec-out screencap -p > {screenshot_path}'
             result = subprocess.run(cmd, shell=True, timeout=10)
             
             if result.returncode != 0:

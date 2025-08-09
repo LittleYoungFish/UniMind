@@ -218,11 +218,7 @@ class UniversalAIAssistant:
             name="APP选择智能体", 
             description="根据用户意图选择最适合的APP应用",
             instructions=APP_SELECTOR,
-            tools=[
-                self.tools.get_installed_apps,
-                self.tools.check_app_status,
-                self.tools.launch_app
-            ],
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("app_selector", {}).get("model", "gpt-4o-mini"),
             generation_params={
                 "temperature": agent_configs.get("app_selector", {}).get("temperature", 0.2)
@@ -234,11 +230,7 @@ class UniversalAIAssistant:
             name="UI导航智能体",
             description="分析APP界面，导航到目标功能页面",
             instructions=UI_NAVIGATOR,
-            tools=[
-                self.tools.get_screen_content,
-                self.tools.find_elements,
-                self.tools.capture_screenshot
-            ],
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("ui_navigator", {}).get("model", "gpt-4o-mini"),
             generation_params={
                 "temperature": agent_configs.get("ui_navigator", {}).get("temperature", 0.1)
@@ -250,13 +242,7 @@ class UniversalAIAssistant:
             name="动作执行智能体",
             description="执行具体的APP操作动作",
             instructions=ACTION_EXECUTOR,
-            tools=[
-                self.tools.tap_element,
-                self.tools.input_text,
-                self.tools.swipe_gesture,
-                self.tools.press_key,
-                self.tools.long_press
-            ],
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("action_executor", {}).get("model", "gpt-4o-mini"),
             generation_params={
                 "temperature": agent_configs.get("action_executor", {}).get("temperature", 0.1)
@@ -268,11 +254,7 @@ class UniversalAIAssistant:
             name="结果验证智能体",
             description="验证操作结果是否达到用户预期",
             instructions=RESULT_VALIDATOR,
-            tools=[
-                self.tools.get_screen_content,
-                self.tools.capture_screenshot,
-                self.tools.verify_operation_result
-            ],
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("result_validator", {}).get("model", "gpt-4o-mini"),
             generation_params={
                 "temperature": agent_configs.get("result_validator", {}).get("temperature", 0.1)
@@ -296,11 +278,7 @@ class UniversalAIAssistant:
             name="多模态处理智能体",
             description="处理语音、图像等多模态输入",
             instructions=MULTIMODAL_PROCESSOR,
-            tools=[
-                self.tools.speech_to_text,
-                self.tools.image_analysis,
-                self.tools.text_to_speech
-            ],
+            tools=[],  # 使用系统默认的工具集合
             model=agent_configs.get("multimodal_processor", {}).get("model", "gpt-4o-mini"),
             generation_params={
                 "temperature": agent_configs.get("multimodal_processor", {}).get("temperature", 0.2)
