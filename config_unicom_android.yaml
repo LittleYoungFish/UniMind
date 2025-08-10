@@ -89,6 +89,12 @@ unicom_operations:
       keywords: ["流量", "剩余流量", "通用流量", "剩余通用流量", "数据流量"]
       target_element: "剩余通用流量"
       
+    - name: "电话智能代接"
+      description: "自动接听来电并播放智能回复，支持多种场景模式"
+      app: "phone_auto_answer"
+      keywords: ["电话代接", "自动接听", "来电", "代接", "场景模式"]
+      target_element: "phone_automation"
+      
     - name: "查询流量使用情况"
       description: "查询当前流量使用情况和剩余流量"
       app: "unicom_app"
@@ -175,6 +181,11 @@ user_demand_types:
   - type: "账户查询"
     description: "查询账户相关信息，如话费、流量、账单等"
     keywords: ["查询", "余额", "话费", "流量", "账单", "使用情况", "剩余流量", "剩余通用流量"]
+    priority: "high"
+    
+  - type: "通信服务"
+    description: "电话智能代接、自动回复、场景模式管理"
+    keywords: ["电话代接", "自动接听", "来电", "代接", "工作模式", "休息模式", "驾驶模式", "会议模式", "学习模式"]
     priority: "high"
     
   - type: "充值缴费"

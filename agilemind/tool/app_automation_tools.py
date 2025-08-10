@@ -13,6 +13,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 from .tool_decorator import tool
+from .phone_auto_answer import phone_manager, ScenarioMode
 
 # 尝试导入可选依赖
 try:

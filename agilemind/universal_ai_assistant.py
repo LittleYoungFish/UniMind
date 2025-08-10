@@ -545,6 +545,12 @@ def universal_ai_assistant(user_input: str, device_id: str = None, **kwargs) -> 
         '流量', '剩余流量', '通用流量', '剩余通用流量', '查询流量', '数据流量', '流量使用'
     ])
     
+    # 检查是否是电话代接相关请求
+    is_phone_request = any(keyword in user_input_lower for keyword in [
+        '电话代接', '自动接听', '场景模式', '工作模式', '休息模式', '驾驶模式', 
+        '会议模式', '学习模式', '电话设置', '来电', '代接'
+    ])
+    
     if is_balance_query:
         # 直接调用我们集成的话费查询功能
         try:
@@ -655,6 +661,63 @@ def universal_ai_assistant(user_input: str, device_id: str = None, **kwargs) -> 
                 "error": str(e),
                 "operation_details": {
                     "real_operation": True,
+                    "exception": str(e)
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    elif is_phone_request:
+        # 处理电话代接相关请求
+        try:
+            from .tool.phone_integration import phone_integration
+            
+            # 使用智能助手处理自然语言请求
+            phone_result = phone_integration.phone_smart_assistant(user_input)
+            
+            if phone_result.get('success'):
+                return {
+                    "success": True,
+                    "user_input": user_input,
+                    "target_service": "电话智能代接",
+                    "execution_steps": 2,  # 请求解析、功能执行
+                    "user_response": f"电话代接功能操作成功！{phone_result.get('message', '')}",
+                    "result": {
+                        "action": phone_result.get('action', 'smart_assistant'),
+                        "phone_result": phone_result,
+                        "scenario_info": phone_result.get('result', {}) if 'result' in phone_result else phone_result
+                    },
+                    "operation_details": {
+                        "service_type": "phone_automation",
+                        "intelligent_processing": True,
+                        "natural_language": True,
+                        "real_operation": True
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "success": False,
+                    "user_input": user_input,
+                    "target_service": "电话智能代接",
+                    "user_response": f"电话代接功能操作失败: {phone_result.get('error', '未知错误')}",
+                    "error": phone_result.get('error', '未知错误'),
+                    "suggestions": phone_result.get('suggestions', []),
+                    "operation_details": {
+                        "service_type": "phone_automation",
+                        "failure_reason": phone_result.get('error')
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "user_input": user_input,
+                "target_service": "电话智能代接",
+                "user_response": f"电话代接功能异常: {str(e)}",
+                "error": str(e),
+                "operation_details": {
+                    "service_type": "phone_automation",
                     "exception": str(e)
                 },
                 "timestamp": datetime.now().isoformat()

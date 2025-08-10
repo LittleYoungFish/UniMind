@@ -1,0 +1,47 @@
+[
+  {
+    "phone_number": "13800138000",
+    "caller_name": "张经理",
+    "call_time": "2025-08-10T15:13:49.610958",
+    "scenario_mode": "meeting",
+    "response_played": "我正在开会，暂时无法接听。会议结束后会及时回复您。紧急事务请发送文字说明。",
+    "duration_seconds": 8.553716,
+    "auto_answered": true
+  },
+  {
+    "phone_number": "18888888888",
+    "caller_name": "快递小哥",
+    "call_time": "2025-08-10T15:13:58.167110",
+    "scenario_mode": "meeting",
+    "response_played": "我正在开会，暂时无法接听。会议结束后会及时回复您。紧急事务请发送文字说明。",
+    "duration_seconds": 8.553717,
+    "auto_answered": true
+  },
+  {
+    "phone_number": "95588",
+    "caller_name": "银行客服",
+    "call_time": "2025-08-10T15:14:06.723748",
+    "scenario_mode": "meeting",
+    "response_played": "我正在开会，暂时无法接听。会议结束后会及时回复您。紧急事务请发送文字说明。",
+    "duration_seconds": 8.553351,
+    "auto_answered": true
+  },
+  {
+    "phone_number": "18600000000",
+    "caller_name": null,
+    "call_time": "2025-08-10T15:14:15.277099",
+    "scenario_mode": "meeting",
+    "response_played": "我正在开会，暂时无法接听。会议结束后会及时回复您。紧急事务请发送文字说明。",
+    "duration_seconds": 8.556637,
+    "auto_answered": true
+  },
+  {
+    "phone_number": "138****8888",
+    "caller_name": "演示来电",
+    "call_time": "2025-08-10T15:14:23.847482",
+    "scenario_mode": "work",
+    "response_played": "您好，我正在工作中，无法接听电话。如有紧急事务请发送短信，我会尽快回复。谢谢理解。",
+    "duration_seconds": 9.152327,
+    "auto_answered": true
+  }
+]
