@@ -83,6 +83,12 @@ unicom_operations:
       app: "unicom_app"
       keywords: ["话费", "余额", "账户"]
       
+    - name: "查询剩余流量"
+      description: "查询当前流量使用情况和剩余流量，点击'剩余通用流量'按钮"
+      app: "unicom_app"
+      keywords: ["流量", "剩余流量", "通用流量", "剩余通用流量", "数据流量"]
+      target_element: "剩余通用流量"
+      
     - name: "查询流量使用情况"
       description: "查询当前流量使用情况和剩余流量"
       app: "unicom_app"
@@ -168,7 +174,7 @@ unicom_operations:
 user_demand_types:
   - type: "账户查询"
     description: "查询账户相关信息，如话费、流量、账单等"
-    keywords: ["查询", "余额", "话费", "流量", "账单", "使用情况"]
+    keywords: ["查询", "余额", "话费", "流量", "账单", "使用情况", "剩余流量", "剩余通用流量"]
     priority: "high"
     
   - type: "充值缴费"

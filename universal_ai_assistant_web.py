@@ -406,6 +406,9 @@ def render_task_results():
         # 检查是否为话费查询结果
         if _is_balance_query_result(result):
             render_balance_query_result(result)
+        # 检查是否为流量查询结果
+        elif _is_data_usage_query_result(result):
+            render_data_usage_query_result(result)
         else:
             render_general_task_result(result)
 
@@ -413,6 +416,11 @@ def _is_balance_query_result(result):
     """检查是否是话费查询结果"""
     user_input = result.get("user_input", "").lower()
     return any(keyword in user_input for keyword in ['话费', '余额', '查询话费', '话费余额'])
+
+def _is_data_usage_query_result(result):
+    """检查是否是流量查询结果"""
+    user_input = result.get("user_input", "").lower()
+    return any(keyword in user_input for keyword in ['流量', '剩余流量', '通用流量', '剩余通用流量', '查询流量', '数据流量', '流量使用'])
 
 def render_balance_query_result(result):
     """渲染话费查询专用结果界面"""
@@ -486,6 +494,116 @@ def render_balance_query_result(result):
     else:
         # 查询失败的情况
         st.error("❌ 话费查询失败")
+        if "result" in result:
+            st.write(f"**结果信息:** {result['result']}")
+    
+    # 通用操作按钮和详细信息
+    render_common_result_section(result)
+
+def render_data_usage_query_result(result):
+    """渲染流量查询专用结果界面"""
+    st.subheader("📊 流量查询结果")
+    
+    # 检查是否有流量相关的结果
+    data_info = None
+    if "result" in result and isinstance(result["result"], dict):
+        if "data_usage" in result["result"]:
+            data_info = result["result"]
+        # 检查结果字符串中是否包含流量信息
+        elif "您的剩余流量为" in str(result.get("result", "")):
+            result_str = str(result["result"])
+            import re
+            # 提取流量信息
+            data_match = re.search(r'(\d+\.?\d*)\s*(GB|MB|TB)', result_str, re.IGNORECASE)
+            if data_match:
+                data_info = {
+                    "data_usage": data_match.group(0),
+                    "raw_amount": float(data_match.group(1)),
+                    "unit": data_match.group(2).upper(),
+                    "message": "流量查询成功"
+                }
+    
+    if data_info:
+        # 显示剩余流量 - 突出显示
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            # 根据流量大小选择不同的颜色
+            raw_amount = data_info.get('raw_amount', 0)
+            unit = data_info.get('unit', '').upper()
+            
+            # 转换为GB进行颜色判断
+            gb_amount = raw_amount
+            if unit == 'MB':
+                gb_amount = raw_amount / 1024
+            elif unit == 'TB':
+                gb_amount = raw_amount * 1024
+            
+            # 根据剩余流量选择颜色
+            if gb_amount >= 10:  # 10GB以上 - 绿色
+                gradient_colors = "#00c851, #007e33"
+                status_text = "充足"
+            elif gb_amount >= 1:  # 1-10GB - 橙色
+                gradient_colors = "#ffbb33, #ff8800"
+                status_text = "适中"
+            else:  # 1GB以下 - 红色
+                gradient_colors = "#ff4444, #cc0000"
+                status_text = "偏少"
+            
+            st.markdown(
+                f"""
+                <div style='
+                    background: linear-gradient(135deg, {gradient_colors});
+                    padding: 2rem;
+                    border-radius: 1rem;
+                    text-align: center;
+                    color: white;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+                '>
+                    <h1 style='margin: 0; font-size: 3rem; font-weight: bold;'>
+                        {data_info.get('data_usage', '未知')}
+                    </h1>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.2rem; opacity: 0.9;'>
+                        剩余流量 ({status_text})
+                    </p>
+                    <small style='opacity: 0.7;'>
+                        查询时间: {data_info.get('query_time', '未知')}
+                    </small>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        st.markdown("---")
+        
+        # 详细信息
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📊 流量详情")
+            st.info(f"**剩余流量:** {data_info.get('data_usage', 'N/A')}")
+            st.info(f"**数值:** {data_info.get('raw_amount', 'N/A')} {data_info.get('unit', '')}")
+            if "confidence_score" in data_info:
+                st.info(f"**置信度得分:** {data_info.get('confidence_score', 'N/A')}")
+            
+            # 流量使用建议
+            if gb_amount < 1:
+                st.warning("⚠️ 流量不足，建议及时充值")
+            elif gb_amount < 5:
+                st.info("💡 流量适中，注意合理使用")
+            else:
+                st.success("✅ 流量充足，可放心使用")
+        
+        with col2:
+            st.markdown("#### ✅ 执行状态")
+            st.success("✅ 查询成功")
+            st.success("✅ 自动化操作完成")
+            st.success("✅ 智能识别成功")
+            if data_info.get('duration_seconds'):
+                st.info(f"⏱️ 执行时间: {data_info.get('duration_seconds', 0):.1f} 秒")
+    
+    else:
+        # 查询失败的情况
+        st.error("❌ 流量查询失败")
         if "result" in result:
             st.write(f"**结果信息:** {result['result']}")
     

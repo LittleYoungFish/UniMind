@@ -1546,3 +1546,411 @@ class AppAutomationTools:
                 "message": f"查询过程中发生异常: {str(e)}",
                 "query_time": str(datetime.now())
             }
+
+    def smart_extract_data_usage(self, elements: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        智能提取剩余流量数据
+        通过语义分析和相邻元素关系找到真正的流量信息
+        
+        Args:
+            elements: UI元素列表
+            
+        Returns:
+            提取到的流量信息或None
+        """
+        import re
+        
+        data_candidates = []
+        
+        # 遍历所有元素，查找流量数据
+        for i, elem in enumerate(elements):
+            text = elem.get('text', '').strip()
+            if not text:
+                continue
+                
+            # 方法1：查找包含完整流量的文本（如"2.5GB"、"500MB"）
+            data_pattern = r'(\d+(?:\.\d+)?)\s*(GB|MB|TB|g|m|t)'
+            data_matches = re.findall(data_pattern, text, re.IGNORECASE)
+            
+            # 方法2：查找纯数字流量（如"2.5"），然后检查相邻元素
+            pure_number_pattern = r'^(\d+(?:\.\d+)?)$'
+            pure_number_match = re.match(pure_number_pattern, text)
+            
+            # 处理完整流量文本
+            if data_matches:
+                for amount, unit in data_matches:
+                    candidate = self._create_data_candidate(amount, unit.upper(), text, i, elements, "完整流量文本")
+                    data_candidates.append(candidate)
+            
+            # 处理纯数字流量（重点改进部分）
+            elif pure_number_match:
+                amount = pure_number_match.group(1)
+                
+                # 检查相邻元素是否有流量单位
+                unit_found = None
+                unit_bonus = 0
+                nearby_units = []
+                for j in range(max(0, i-2), min(len(elements), i+3)):  # 检查前后2个元素
+                    if j != i and j < len(elements):
+                        neighbor_text = elements[j].get('text', '').strip().upper()
+                        if neighbor_text in ['GB', 'MB', 'TB', 'G', 'M', 'T']:
+                            unit_found = neighbor_text if neighbor_text in ['GB', 'MB', 'TB'] else neighbor_text + 'B'
+                            unit_bonus = 80  # 高分奖励
+                            nearby_units.append(f"相邻流量单位: {neighbor_text}")
+                            break
+                
+                # 如果找到单位，创建候选
+                if unit_found:
+                    candidate = self._create_data_candidate(amount, unit_found, text, i, elements, "纯数字流量")
+                    candidate['context_score'] += unit_bonus
+                    candidate['context'].extend(nearby_units)
+                    
+                    # 特别检查：紧密相邻的"剩余流量"、"剩余通用流量"标题（重点加分）
+                    title_proximity_bonus = 0
+                    for j in range(max(0, i-3), i):  # 检查前3个元素
+                        if j < len(elements):
+                            neighbor_text = elements[j].get('text', '').strip().lower()
+                            if any(keyword in neighbor_text for keyword in ['剩余通用流量', '剩余流量', '通用流量', '剩余数据', '可用流量']):
+                                distance = i - j
+                                if distance == 1:  # 紧挨着
+                                    title_proximity_bonus = 200
+                                    candidate['context'].append(f"紧挨着流量标题(距离{distance})")
+                                elif distance == 2:  # 中间隔一个元素（可能是单位）
+                                    title_proximity_bonus = 180
+                                    candidate['context'].append(f"非常接近流量标题(距离{distance})")
+                                elif distance == 3:
+                                    title_proximity_bonus = 120
+                                    candidate['context'].append(f"接近流量标题(距离{distance})")
+                                break
+                    
+                    candidate['context_score'] += title_proximity_bonus
+                    
+                    # 检查是否在页面顶部位置（通过元素索引判断）
+                    if i <= 15:  # 前15个元素认为是顶部
+                        candidate['context_score'] += 40
+                        candidate['context'].append("位于页面顶部区域")
+                    
+                    data_candidates.append(candidate)
+        
+        # 按语义得分排序
+        data_candidates.sort(key=lambda x: x['context_score'], reverse=True)
+        
+        # 输出分析结果
+        self.logger.info(f"🧠 智能分析找到 {len(data_candidates)} 个流量候选")
+        for i, candidate in enumerate(data_candidates[:5]):  # 显示前5个
+            self.logger.info(f"  {i+1}. {candidate['amount']} (得分: {candidate['context_score']})")
+            self.logger.info(f"     原文: {candidate['element_text']}")
+            self.logger.info(f"     元素位置: 第{candidate['element_index']+1}个")
+            self.logger.info(f"     上下文: {'; '.join(candidate['context'])}")
+        
+        # 返回得分最高的候选
+        if data_candidates and data_candidates[0]['context_score'] > 0:
+            best_candidate = data_candidates[0]
+            return {
+                'amount': best_candidate['amount'],
+                'raw_amount': best_candidate['raw_amount'],
+                'unit': best_candidate['unit'],
+                'context': best_candidate['element_text'],
+                'score': best_candidate['context_score']
+            }
+        
+        return None
+
+    def _create_data_candidate(self, amount: str, unit: str, text: str, element_index: int, elements: List[Dict[str, Any]], source_type: str) -> Dict[str, Any]:
+        """创建流量候选"""
+        candidate = {
+            'amount': f"{amount}{unit}",
+            'raw_amount': float(amount),
+            'unit': unit,
+            'element_text': text,
+            'element_index': element_index,
+            'context_score': 0,
+            'context': [f"来源: {source_type}"]
+        }
+        
+        # 分析当前元素的语义上下文
+        text_lower = text.lower()
+        
+        # 高优先级关键词（明确表示剩余流量）
+        high_priority_keywords = ['剩余通用流量', '剩余流量', '通用流量', '可用流量', '剩余数据', '可用数据', '剩余上网流量']
+        for keyword in high_priority_keywords:
+            if keyword in text_lower:
+                candidate['context_score'] += 70  # 比话费稍高，因为流量词汇更具体
+                candidate['context'].append(f"包含关键词: {keyword}")
+        
+        # 中优先级关键词
+        medium_priority_keywords = ['流量', '数据', '上网', '网络', '通用']
+        for keyword in medium_priority_keywords:
+            if keyword in text_lower:
+                candidate['context_score'] += 35
+                candidate['context'].append(f"包含关键词: {keyword}")
+        
+        # 负面关键词（表示不是剩余流量）
+        negative_keywords = ['充值', '购买', '套餐', '售价', '优惠', '立即', '领取', '券', '福利', '已用', '已使用', '消耗']
+        for keyword in negative_keywords:
+            if keyword in text_lower:
+                candidate['context_score'] -= 50
+                candidate['context'].append(f"负面关键词: {keyword}")
+        
+        # 检查邻近元素的语义上下文
+        context_range = 3  # 检查前后3个元素
+        for j in range(max(0, element_index-context_range), min(len(elements), element_index+context_range+1)):
+            if j == element_index:
+                continue
+            if j < len(elements):
+                neighbor = elements[j]
+                neighbor_text = neighbor.get('text', '').strip().lower()
+                
+                # 高优先级邻近元素
+                if any(keyword in neighbor_text for keyword in high_priority_keywords):
+                    distance_bonus = max(35 - abs(j - element_index) * 10, 10)  # 距离越近分数越高
+                    candidate['context_score'] += distance_bonus
+                    candidate['context'].append(f"邻近关键元素(距离{abs(j-element_index)}): {neighbor_text}")
+                
+                # 中优先级邻近元素
+                elif any(keyword in neighbor_text for keyword in medium_priority_keywords):
+                    distance_bonus = max(25 - abs(j - element_index) * 5, 5)
+                    candidate['context_score'] += distance_bonus
+                    candidate['context'].append(f"邻近相关元素(距离{abs(j-element_index)}): {neighbor_text}")
+                
+                # 负面邻近元素
+                elif any(keyword in neighbor_text for keyword in negative_keywords):
+                    candidate['context_score'] -= 30
+                    candidate['context'].append(f"邻近负面元素: {neighbor_text}")
+        
+        # 流量合理性检查
+        # GB范围：0.01-1000GB，MB范围：1-999999MB
+        if unit.upper() == 'GB':
+            if 0.01 <= candidate['raw_amount'] <= 1000:
+                candidate['context_score'] += 20
+                candidate['context'].append("GB数值在合理范围内")
+            else:
+                candidate['context_score'] -= 25
+                candidate['context'].append("GB数值可能不合理")
+        elif unit.upper() == 'MB':
+            if 1 <= candidate['raw_amount'] <= 999999:
+                candidate['context_score'] += 15
+                candidate['context'].append("MB数值在合理范围内")
+            else:
+                candidate['context_score'] -= 25
+                candidate['context'].append("MB数值可能不合理")
+        
+        return candidate
+
+    @tool(
+        "query_unicom_data_usage",
+        description="查询中国联通剩余流量，集成了智能识别功能",
+        group="unicom_android"
+    )
+    def query_unicom_data_usage(self) -> Dict[str, Any]:
+        """
+        查询联通剩余流量的完整流程
+        集成了修复后的设备连接、APP启动和智能流量识别功能
+        
+        Returns:
+            包含流量信息的字典
+        """
+        from datetime import datetime
+        
+        start_time = datetime.now()
+        self.logger.info("🎯 开始联通剩余流量查询...")
+        
+        try:
+            # 1. 检查设备连接
+            self.logger.info("📱 1. 检查设备连接...")
+            try:
+                result = subprocess.run([self.adb_path, "devices"], capture_output=True, text=True, timeout=5)
+                if "device" in result.stdout and len(result.stdout.split('\n')) > 1:
+                    self.logger.info("✅ 设备连接正常")
+                else:
+                    return {
+                        "success": False,
+                        "message": "设备未连接",
+                        "query_time": str(datetime.now())
+                    }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"设备检查失败: {e}",
+                    "query_time": str(datetime.now())
+                }
+            
+            # 2. 直接启动联通APP
+            self.logger.info("🚀 2. 直接启动联通APP...")
+            try:
+                # 获取设备ID
+                device_result = subprocess.run([self.adb_path, "devices"], capture_output=True, text=True, timeout=5)
+                device_lines = device_result.stdout.strip().split('\n')[1:]  # 跳过第一行标题
+                device_id = None
+                for line in device_lines:
+                    if 'device' in line:
+                        device_id = line.split('\t')[0]
+                        break
+                
+                if device_id:
+                    self.logger.info(f"📱 检测到设备: {device_id}")
+                    # 使用monkey命令启动联通APP
+                    launch_cmd = [self.adb_path, "-s", device_id, "shell", "monkey", "-p", "com.sinovatech.unicom.ui", "-c", "android.intent.category.LAUNCHER", "1"]
+                    launch_result = subprocess.run(launch_cmd, capture_output=True, text=True, timeout=10)
+                    
+                    if launch_result.returncode == 0:
+                        self.logger.info("✅ 联通APP启动成功")
+                        time.sleep(5)  # 等待APP完全启动
+                    else:
+                        self.logger.info("🔄 尝试备用启动方案...")
+                        backup_cmd = [self.adb_path, "-s", device_id, "shell", "am", "start", "-n", "com.sinovatech.unicom.ui/.MainActivity"]
+                        backup_result = subprocess.run(backup_cmd, capture_output=True, text=True, timeout=10)
+                        if backup_result.returncode == 0:
+                            self.logger.info("✅ 备用方案启动成功")
+                            time.sleep(5)
+                        else:
+                            return {
+                                "success": False,
+                                "message": f"APP启动失败: {backup_result.stderr}",
+                                "query_time": str(datetime.now())
+                            }
+                else:
+                    return {
+                        "success": False,
+                        "message": "未检测到设备",
+                        "query_time": str(datetime.now())
+                    }
+                        
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"启动APP时出错: {e}",
+                    "query_time": str(datetime.now())
+                }
+            
+            # 3. 检查是否成功进入APP
+            self.logger.info("📋 3. 检查APP是否已启动...")
+            new_elements = self.find_elements()
+            if new_elements.get('success'):
+                new_elem_list = new_elements.get('elements', [])
+                self.logger.info(f"✅ 新界面有 {len(new_elem_list)} 个元素")
+                
+                # 检查是否在APP内
+                if self._check_if_in_app(new_elem_list):
+                    self.logger.info("✅ 确认已进入联通APP")
+                    
+                    # 查找流量查询相关按钮
+                    self.logger.info("🔍 4. 查找流量查询按钮...")
+                    data_buttons = []
+                    
+                    for elem in new_elem_list:
+                        text = elem.get('text', '').strip()
+                        text_lower = text.lower()
+                        
+                        # 精确匹配流量相关按钮
+                        if any(keyword in text_lower for keyword in ['剩余通用流量', '剩余流量', '通用流量', '流量使用', '数据流量']):
+                            if '话费' not in text_lower and '语音' not in text_lower:  # 排除话费和语音
+                                data_buttons.append(elem)
+                                self.logger.info(f"  🎯 找到流量按钮: {text} - 位置{elem['bounds']}")
+                    
+                    if data_buttons:
+                        self.logger.info(f"🎯 找到 {len(data_buttons)} 个流量按钮")
+                        # 选择最合适的按钮
+                        best_button = data_buttons[0]
+                        self.logger.info(f"🔥 准备点击: {best_button['text']}")
+                        
+                        # 获取点击前的截图
+                        self.logger.info("📸 点击前截图...")
+                        self.capture_screenshot()
+                        
+                        # 精确点击，避免滑动
+                        self.logger.info(f"🎯 精确点击位置: ({best_button['center_x']}, {best_button['center_y']})")
+                        tap_result2 = self.tap_element(best_button['center_x'], best_button['center_y'])
+                        
+                        if tap_result2.get('success'):
+                            self.logger.info("✅ 流量按钮点击成功")
+                            
+                            # 等待界面响应
+                            self.logger.info("⏳ 等待界面加载...")
+                            time.sleep(4)
+                            
+                            # 获取点击后的截图
+                            self.logger.info("📸 点击后截图...")
+                            self.capture_screenshot()
+                            
+                            # 检查是否还在APP内
+                            self.logger.info("🔍 5. 检查点击后的界面状态...")
+                            final_elements = self.find_elements()
+                            if final_elements.get('success'):
+                                final_elem_list = final_elements.get('elements', [])
+                                self.logger.info(f"✅ 当前界面有 {len(final_elem_list)} 个元素")
+                                
+                                # 检查是否还在APP内
+                                if self._check_if_in_app(final_elem_list):
+                                    self.logger.info("✅ 确认还在APP内，开始查找流量信息...")
+                                    
+                                    # 智能识别剩余流量
+                                    data_result = self.smart_extract_data_usage(final_elem_list)
+                                    if data_result:
+                                        end_time = datetime.now()
+                                        duration = (end_time - start_time).total_seconds()
+                                        
+                                        result = {
+                                            "success": True,
+                                            "data_usage": data_result['amount'],
+                                            "raw_amount": data_result['raw_amount'],
+                                            "unit": data_result['unit'],
+                                            "context": data_result['context'],
+                                            "confidence_score": data_result['score'],
+                                            "query_time": str(end_time),
+                                            "duration_seconds": duration,
+                                            "message": f"成功查询剩余流量: {data_result['amount']}"
+                                        }
+                                        self.logger.info(f"🎉 成功查询剩余流量: {data_result['amount']}")
+                                        return result
+                                    else:
+                                        return {
+                                            "success": False,
+                                            "message": "未能智能识别剩余流量",
+                                            "available_elements": [elem.get('text', '') for elem in final_elem_list[:10] if elem.get('text', '').strip()],
+                                            "query_time": str(datetime.now())
+                                        }
+                                else:
+                                    return {
+                                        "success": False,
+                                        "message": "应用已退出，点击操作可能触发了意外行为",
+                                        "query_time": str(datetime.now())
+                                    }
+                            else:
+                                return {
+                                    "success": False,
+                                    "message": "获取点击后界面失败",
+                                    "query_time": str(datetime.now())
+                                }
+                        else:
+                            return {
+                                "success": False,
+                                "message": "流量按钮点击失败",
+                                "query_time": str(datetime.now())
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "message": "未找到流量查询按钮",
+                            "available_texts": [elem.get('text', '') for elem in new_elem_list[:10] if elem.get('text', '').strip()],
+                            "query_time": str(datetime.now())
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "message": "APP启动后未能进入主界面",
+                        "query_time": str(datetime.now())
+                    }
+            else:
+                return {
+                    "success": False,
+                    "message": "获取APP界面失败", 
+                    "query_time": str(datetime.now())
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"查询过程中发生异常: {str(e)}",
+                "query_time": str(datetime.now())
+            }

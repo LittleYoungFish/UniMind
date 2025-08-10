@@ -540,6 +540,11 @@ def universal_ai_assistant(user_input: str, device_id: str = None, **kwargs) -> 
         '话费', '余额', '查询话费', '话费余额', '剩余话费', '查询余额'
     ])
     
+    # 检查是否是流量查询相关请求
+    is_data_usage_query = any(keyword in user_input_lower for keyword in [
+        '流量', '剩余流量', '通用流量', '剩余通用流量', '查询流量', '数据流量', '流量使用'
+    ])
+    
     if is_balance_query:
         # 直接调用我们集成的话费查询功能
         try:
@@ -589,6 +594,64 @@ def universal_ai_assistant(user_input: str, device_id: str = None, **kwargs) -> 
                 "user_input": user_input,
                 "target_app": "中国联通",
                 "user_response": f"话费查询过程中发生异常: {str(e)}",
+                "error": str(e),
+                "operation_details": {
+                    "real_operation": True,
+                    "exception": str(e)
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    elif is_data_usage_query:
+        # 直接调用我们集成的流量查询功能
+        try:
+            tools = AppAutomationTools()
+            data_result = tools.query_unicom_data_usage()
+            
+            if data_result.get('success'):
+                return {
+                    "success": True,
+                    "user_input": user_input,
+                    "target_app": "中国联通",
+                    "execution_steps": 5,  # 设备连接、APP启动、按钮查找、点击操作、流量提取
+                    "user_response": f"流量查询成功！您的剩余流量为 {data_result['data_usage']}",
+                    "result": {
+                        "data_usage": data_result['data_usage'], 
+                        "raw_amount": data_result.get('raw_amount', 0),
+                        "unit": data_result.get('unit', ''),
+                        "confidence_score": data_result.get('confidence_score', 0),
+                        "query_time": data_result.get('query_time'),
+                        "duration_seconds": data_result.get('duration_seconds', 0),
+                        "context": data_result.get('context', '')
+                    },
+                    "operation_details": {
+                        "device_connected": True,
+                        "app_launched": True, 
+                        "data_usage_extracted": True,
+                        "real_operation": True  # 标记这是真实操作
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "success": False,
+                    "user_input": user_input,
+                    "target_app": "中国联通",
+                    "user_response": f"流量查询失败: {data_result.get('message', '未知错误')}",
+                    "error": data_result.get('message', '未知错误'),
+                    "operation_details": {
+                        "real_operation": True,
+                        "failure_reason": data_result.get('message')
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "user_input": user_input,
+                "target_app": "中国联通",
+                "user_response": f"流量查询过程中发生异常: {str(e)}",
                 "error": str(e),
                 "operation_details": {
                     "real_operation": True,
