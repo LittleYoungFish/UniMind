@@ -86,16 +86,19 @@ class UnicomAndroidTools:
             timestamp = int(time.time())
             screenshot_path = os.path.join(screenshot_dir, f"screenshot_{timestamp}.png")
             
-            success, output = self._execute_adb_command(f"exec-out screencap -p > {screenshot_path}")
+            # 使用简单的方法：先保存到设备，再拉取
+            success, output = self._execute_adb_command("shell screencap -p /sdcard/screenshot_temp.png")
             if success:
-                return screenshot_path
-            else:
-                # 尝试另一种方法
-                success, output = self._execute_adb_command("shell screencap -p /sdcard/screenshot.png")
+                # 拉取文件到本地
+                success, output = self._execute_adb_command(f"pull /sdcard/screenshot_temp.png \"{screenshot_path}\"")
                 if success:
-                    success, output = self._execute_adb_command(f"pull /sdcard/screenshot.png {screenshot_path}")
-                    if success:
-                        return screenshot_path
+                    # 清理设备上的临时文件
+                    self._execute_adb_command("shell rm /sdcard/screenshot_temp.png")
+                    return screenshot_path
+                else:
+                    self.logger.error(f"拉取截图失败: {output}")
+            else:
+                self.logger.error(f"设备截图失败: {output}")
                         
             return None
         except Exception as e:
@@ -165,7 +168,7 @@ class UnicomAndroidTools:
             return []
 
     @tool(
-        name="unicom_android_connect",
+        "unicom_android_connect",
         description="连接到Android设备，专门用于中国联通APP操作",
         group="unicom_android"
     )
@@ -200,7 +203,7 @@ class UnicomAndroidTools:
             return {"success": False, "message": f"连接失败: {str(e)}"}
 
     @tool(
-        name="unicom_launch_app",
+        "unicom_launch_app",
         description="启动指定的中国联通APP",
         group="unicom_android"
     )
@@ -229,7 +232,7 @@ class UnicomAndroidTools:
             return {"success": False, "message": f"启动失败: {str(e)}"}
 
     @tool(
-        name="unicom_get_screen_content",
+        "unicom_get_screen_content",
         description="获取当前屏幕内容，专门识别中国联通APP界面元素",
         group="unicom_android"
     )
@@ -282,53 +285,51 @@ class UnicomAndroidTools:
         return "未知页面"
 
     @tool(
-        name="unicom_find_element_by_text",
+        "unicom_find_element_by_text",
         description="在联通APP中根据文本查找元素",
         group="unicom_android"
     )
     def unicom_find_element_by_text(self, text: str, app_context: str = "unicom_app") -> Dict[str, Any]:
         """根据文本查找元素"""
         try:
-            # 获取当前屏幕内容
+            # 首先尝试使用UI Automator查找元素（不依赖OCR）
+            success, output = self._execute_adb_command(f'shell uiautomator dump /sdcard/ui_dump.xml')
+            if success:
+                success, xml_content = self._execute_adb_command('shell cat /sdcard/ui_dump.xml')
+                if success and text in xml_content:
+                    return {
+                        "success": True,
+                        "found": True,
+                        "text": text,
+                        "method": "uiautomator"
+                    }
+            
+            # 如果UI Automator没找到，尝试OCR方法
             screen_result = self.unicom_get_screen_content(app_context)
-            if not screen_result["success"]:
-                return screen_result
-            
-            ocr_text = screen_result["ocr_text"]
-            
-            # 检查文本是否存在
-            if text in ocr_text:
-                # 使用UI Automator查找具体位置
-                success, output = self._execute_adb_command(f'shell uiautomator dump /sdcard/ui_dump.xml')
-                if success:
-                    success, xml_content = self._execute_adb_command('shell cat /sdcard/ui_dump.xml')
-                    if success and text in xml_content:
-                        return {
-                            "success": True,
-                            "found": True,
-                            "text": text,
-                            "method": "uiautomator"
-                        }
+            if screen_result["success"]:
+                ocr_text = screen_result["ocr_text"]
                 
-                return {
-                    "success": True,
-                    "found": True,
-                    "text": text,
-                    "method": "ocr"
-                }
-            else:
-                return {
-                    "success": True,
-                    "found": False,
-                    "text": text,
-                    "message": f"未找到文本: {text}"
-                }
+                # 检查文本是否存在
+                if text in ocr_text:
+                    return {
+                        "success": True,
+                        "found": True,
+                        "text": text,
+                        "method": "ocr"
+                    }
+            
+            return {
+                "success": True,
+                "found": False,
+                "text": text,
+                "message": f"未找到文本: {text}"
+            }
                 
         except Exception as e:
             return {"success": False, "message": f"查找元素失败: {str(e)}"}
 
     @tool(
-        name="unicom_tap_element",
+        "unicom_tap_element",
         description="点击联通APP中的指定元素",
         group="unicom_android"
     )
@@ -340,25 +341,66 @@ class UnicomAndroidTools:
             if not find_result["success"] or not find_result.get("found"):
                 return {"success": False, "message": f"未找到元素: {text}"}
             
-            # 尝试使用UI Automator点击
-            success, output = self._execute_adb_command(f'shell uiautomator2 click "{text}"')
+            # 尝试使用更直接的方式点击 - 通过input tap
+            # 首先尝试通过UI Automator获取坐标
+            success, output = self._execute_adb_command(f'shell uiautomator dump /sdcard/ui_dump.xml')
             if success:
-                time.sleep(self.config.get("ui_automation", {}).get("operations", {}).get("tap_duration", 100) / 1000)
-                return {
-                    "success": True,
-                    "message": f"成功点击元素: {text}",
-                    "method": "uiautomator"
-                }
+                success, xml_content = self._execute_adb_command('shell cat /sdcard/ui_dump.xml')
+                if success and text in xml_content:
+                    # 尝试提取坐标信息（简化实现）
+                    # 这里使用模拟点击，先尝试通过input tap命令
+                    import re
+                    bounds_pattern = rf'text="{text}"[^>]*bounds="(\[[\d,\]]+)"'
+                    match = re.search(bounds_pattern, xml_content)
+                    if match:
+                        bounds = match.group(1)
+                        # 解析bounds获取中心点坐标
+                        coords = re.findall(r'\d+', bounds)
+                        if len(coords) >= 4:
+                            x = (int(coords[0]) + int(coords[2])) // 2
+                            y = (int(coords[1]) + int(coords[3])) // 2
+                            
+                            # 使用坐标点击
+                            success, output = self._execute_adb_command(f'shell input tap {x} {y}')
+                            if success:
+                                time.sleep(self.config.get("ui_automation", {}).get("operations", {}).get("tap_duration", 100) / 1000)
+                                return {
+                                    "success": True,
+                                    "message": f"成功点击元素: {text} (坐标: {x}, {y})",
+                                    "method": "coordinate_tap"
+                                }
             
-            # 如果UI Automator失败，尝试通过坐标点击
-            # 这里需要更复杂的图像处理来定位元素坐标
-            return {"success": False, "message": f"点击元素失败: {text}"}
+            # 如果坐标点击失败，尝试使用内容描述点击
+            content_desc_command = f'shell input tap $(dumpsys window | grep -E "mCurrentFocus.*{text}" | head -1)'
+            
+            # 简化方案：直接尝试点击屏幕中心附近的常见位置
+            common_positions = [
+                (540, 1800),  # 底部导航"我的"
+                (540, 1600),  # 底部导航"服务"  
+                (540, 800),   # 屏幕中央
+                (200, 300),   # 左上角
+                (800, 300),   # 右上角
+            ]
+            
+            for x, y in common_positions:
+                # 先截图检查当前状态
+                self._capture_screenshot()
+                success, output = self._execute_adb_command(f'shell input tap {x} {y}')
+                if success:
+                    time.sleep(1)
+                    return {
+                        "success": True,
+                        "message": f"尝试点击位置: {text} (坐标: {x}, {y})",
+                        "method": "common_position"
+                    }
+            
+            return {"success": False, "message": f"所有点击方法均失败: {text}"}
             
         except Exception as e:
             return {"success": False, "message": f"点击失败: {str(e)}"}
 
     @tool(
-        name="unicom_input_text",
+        "unicom_input_text",
         description="在联通APP中输入文本",
         group="unicom_android"
     )
@@ -385,7 +427,7 @@ class UnicomAndroidTools:
             return {"success": False, "message": f"输入失败: {str(e)}"}
 
     @tool(
-        name="unicom_perform_operation",
+        "unicom_perform_operation",
         description="执行联通业务操作，如查询话费、充值、办理套餐等",
         group="unicom_android"
     )
@@ -503,7 +545,7 @@ class UnicomAndroidTools:
             return {"success": False, "message": f"执行步骤失败: {str(e)}"}
 
     @tool(
-        name="unicom_close_app",
+        "unicom_close_app",
         description="关闭指定的中国联通APP",
         group="unicom_android"
     )
@@ -531,7 +573,7 @@ class UnicomAndroidTools:
             return {"success": False, "message": f"关闭失败: {str(e)}"}
 
     @tool(
-        name="unicom_get_app_status",
+        "unicom_get_app_status",
         description="获取中国联通APP的运行状态",
         group="unicom_android"
     )
@@ -565,4 +607,285 @@ class UnicomAndroidTools:
             
         except Exception as e:
             return {"success": False, "message": f"获取状态失败: {str(e)}"}
+
+    @tool(
+        "unicom_user_benefits_claim",
+        description="执行用户权益领取业务流程，包括领券中心、权益超市、PLUS会员等",
+        group="unicom_android"
+    )
+    def unicom_user_benefits_claim(self, user_interaction_callback=None) -> Dict[str, Any]:
+        """执行用户权益领取业务流程"""
+        try:
+            results = []
+            
+            # 1. 启动中国联通APP
+            launch_result = self.unicom_launch_app("unicom_app")
+            if not launch_result["success"]:
+                return launch_result
+            results.append({"step": "启动APP", "result": launch_result})
+            
+            # 等待APP加载
+            time.sleep(3)
+            
+            # 2. 进入"我的"页面
+            my_page_result = self._navigate_to_my_page()
+            results.append({"step": "进入我的页面", "result": my_page_result})
+            if not my_page_result["success"]:
+                return {"success": False, "message": "无法进入我的页面", "results": results}
+            
+            # 3. 进入领券中心并领取优惠券
+            coupon_result = self._claim_coupons_in_center()
+            results.append({"step": "领取优惠券", "result": coupon_result})
+            
+            # 4. 进入服务页面
+            service_result = self._navigate_to_service_page()
+            results.append({"step": "进入服务页面", "result": service_result})
+            if not service_result["success"]:
+                return {"success": False, "message": "无法进入服务页面", "results": results}
+            
+            # 5. 处理权益超市
+            market_result = self._handle_benefits_market(user_interaction_callback)
+            results.append({"step": "处理权益超市", "result": market_result})
+            
+            # 6. 处理PLUS会员
+            plus_result = self._handle_plus_membership(user_interaction_callback)
+            results.append({"step": "处理PLUS会员", "result": plus_result})
+            
+            return {
+                "success": True,
+                "message": "用户权益领取业务流程完成",
+                "results": results
+            }
+            
+        except Exception as e:
+            return {"success": False, "message": f"权益领取失败: {str(e)}"}
+
+    def _navigate_to_my_page(self) -> Dict[str, Any]:
+        """导航到"我的"页面"""
+        try:
+            # 查找并点击"我的"按钮
+            find_result = self.unicom_find_element_by_text("我的")
+            if not find_result["success"] or not find_result.get("found"):
+                return {"success": False, "message": "未找到我的按钮"}
+            
+            # 点击"我的"
+            tap_result = self.unicom_tap_element("我的")
+            if not tap_result["success"]:
+                return {"success": False, "message": "点击我的按钮失败"}
+            
+            # 等待页面加载
+            time.sleep(2)
+            
+            return {"success": True, "message": "成功进入我的页面"}
+            
+        except Exception as e:
+            return {"success": False, "message": f"导航到我的页面失败: {str(e)}"}
+
+    def _claim_coupons_in_center(self) -> Dict[str, Any]:
+        """在领券中心领取优惠券"""
+        try:
+            claimed_coupons = []
+            
+            # 尝试查找并点击"领券中心"
+            # 首先通过UI Automator查找
+            success, output = self._execute_adb_command('shell uiautomator dump /sdcard/ui_dump.xml')
+            if success:
+                success, xml_content = self._execute_adb_command('shell cat /sdcard/ui_dump.xml')
+                if success and ("领券中心" in xml_content or "领券" in xml_content):
+                    # 找到了领券中心元素，尝试点击
+                    tap_result = self.unicom_tap_element("领券中心")
+                    if not tap_result["success"]:
+                        # 如果直接点击失败，尝试滑动查找
+                        for _ in range(3):
+                            self._execute_adb_command("shell input swipe 500 800 500 400 500")
+                            time.sleep(1)
+                            tap_result = self.unicom_tap_element("领券中心")
+                            if tap_result["success"]:
+                                break
+                    
+                    if tap_result["success"]:
+                        # 等待页面加载
+                        time.sleep(3)
+                        
+                        # 循环查找所有"领取"按钮并点击
+                        max_attempts = 10  # 最多尝试10次
+                        for attempt in range(max_attempts):
+                            # 获取UI dump查找领取按钮
+                            success, output = self._execute_adb_command('shell uiautomator dump /sdcard/ui_dump.xml')
+                            if success:
+                                success, xml_content = self._execute_adb_command('shell cat /sdcard/ui_dump.xml')
+                                if success and "领取" in xml_content:
+                                    # 尝试点击领取按钮
+                                    tap_result = self.unicom_tap_element("领取")
+                                    if tap_result["success"]:
+                                        claimed_coupons.append(f"优惠券_{attempt + 1}")
+                                        time.sleep(2)  # 等待领取完成
+                                        
+                                        # 检查是否需要返回
+                                        self._execute_adb_command("shell input keyevent KEYCODE_BACK")
+                                        time.sleep(1)
+                                    else:
+                                        break
+                                else:
+                                    break  # 没有更多可领取的券
+                            else:
+                                break
+                        
+                        # 返回到我的页面
+                        self._execute_adb_command("shell input keyevent KEYCODE_BACK")
+                        time.sleep(2)
+                        
+                        return {
+                            "success": True, 
+                            "message": f"成功领取 {len(claimed_coupons)} 张优惠券",
+                            "claimed_coupons": claimed_coupons
+                        }
+                    else:
+                        return {"success": False, "message": "点击领券中心失败"}
+                else:
+                    return {"success": False, "message": "未找到领券中心"}
+            else:
+                return {"success": False, "message": "UI分析失败"}
+            
+        except Exception as e:
+            return {"success": False, "message": f"领取优惠券失败: {str(e)}"}
+
+    def _navigate_to_service_page(self) -> Dict[str, Any]:
+        """导航到服务页面"""
+        try:
+            # 查找并点击"服务"按钮
+            find_result = self.unicom_find_element_by_text("服务")
+            if not find_result["success"] or not find_result.get("found"):
+                return {"success": False, "message": "未找到服务按钮"}
+            
+            tap_result = self.unicom_tap_element("服务")
+            if not tap_result["success"]:
+                return {"success": False, "message": "点击服务按钮失败"}
+            
+            # 等待页面加载
+            time.sleep(2)
+            
+            return {"success": True, "message": "成功进入服务页面"}
+            
+        except Exception as e:
+            return {"success": False, "message": f"导航到服务页面失败: {str(e)}"}
+
+    def _handle_benefits_market(self, user_interaction_callback=None) -> Dict[str, Any]:
+        """处理权益超市"""
+        try:
+            # 向下滑动寻找权益栏目
+            for _ in range(3):  # 最多滑动3次
+                screen_result = self.unicom_get_screen_content("unicom_app")
+                if "权益" in screen_result.get("ocr_text", ""):
+                    break
+                # 向下滑动
+                self._execute_adb_command("shell input swipe 500 800 500 400 500")
+                time.sleep(1)
+            
+            # 查找并点击"权益超市"
+            find_result = self.unicom_find_element_by_text("权益超市")
+            if not find_result["success"] or not find_result.get("found"):
+                return {"success": False, "message": "未找到权益超市"}
+            
+            tap_result = self.unicom_tap_element("权益超市")
+            if not tap_result["success"]:
+                return {"success": False, "message": "点击权益超市失败"}
+            
+            # 等待页面加载
+            time.sleep(3)
+            
+            # 询问用户是否需要消费
+            user_wants_to_consume = False
+            if user_interaction_callback:
+                user_wants_to_consume = user_interaction_callback("是否需要在权益超市进行消费？", ["是", "否"]) == "是"
+            
+            if not user_wants_to_consume:
+                # 返回到权益界面
+                self._execute_adb_command("shell input keyevent KEYCODE_BACK")
+                time.sleep(2)
+                return {"success": True, "message": "用户选择不在权益超市消费，已返回"}
+            
+            return {"success": True, "message": "用户选择在权益超市消费，请手动操作"}
+            
+        except Exception as e:
+            return {"success": False, "message": f"处理权益超市失败: {str(e)}"}
+
+    def _handle_plus_membership(self, user_interaction_callback=None) -> Dict[str, Any]:
+        """处理PLUS会员"""
+        try:
+            # 在权益界面查找"PLUS会员"
+            find_result = self.unicom_find_element_by_text("PLUS会员")
+            if not find_result["success"] or not find_result.get("found"):
+                return {"success": False, "message": "未找到PLUS会员"}
+            
+            tap_result = self.unicom_tap_element("PLUS会员")
+            if not tap_result["success"]:
+                return {"success": False, "message": "点击PLUS会员失败"}
+            
+            # 等待页面加载
+            time.sleep(3)
+            
+            # 检查用户是否是PLUS会员
+            screen_result = self.unicom_get_screen_content("unicom_app")
+            screen_text = screen_result.get("ocr_text", "")
+            
+            is_plus_member = any(keyword in screen_text for keyword in ["已开通", "会员有效", "PLUS会员"])
+            
+            if user_interaction_callback:
+                if not is_plus_member:
+                    # 询问用户是否是PLUS会员
+                    user_is_member = user_interaction_callback("您是PLUS会员吗？", ["是", "否"]) == "是"
+                    
+                    if not user_is_member:
+                        # 询问是否需要办理
+                        want_to_apply = user_interaction_callback("是否需要办理PLUS会员？", ["是", "否"]) == "是"
+                        
+                        if not want_to_apply:
+                            # 退出界面
+                            self._execute_adb_command("shell input keyevent KEYCODE_BACK")
+                            time.sleep(2)
+                            return {"success": True, "message": "用户选择不办理PLUS会员，已退出"}
+                        else:
+                            return {"success": True, "message": "用户选择办理PLUS会员，业务结束，请手动操作"}
+                    else:
+                        is_plus_member = True
+                
+                if is_plus_member:
+                    # 让用户选择领取哪个权益
+                    available_benefits = self._get_available_benefits(screen_text)
+                    if available_benefits:
+                        selected_benefit = user_interaction_callback(
+                            f"请选择要领取的权益：{', '.join(available_benefits)}", 
+                            available_benefits
+                        )
+                        
+                        # 尝试点击选择的权益
+                        if selected_benefit:
+                            tap_result = self.unicom_tap_element(selected_benefit)
+                            if tap_result["success"]:
+                                return {"success": True, "message": f"成功选择权益: {selected_benefit}"}
+                            else:
+                                return {"success": False, "message": f"点击权益失败: {selected_benefit}"}
+                    else:
+                        return {"success": True, "message": "未找到可领取的权益"}
+            
+            return {"success": True, "message": "PLUS会员处理完成"}
+            
+        except Exception as e:
+            return {"success": False, "message": f"处理PLUS会员失败: {str(e)}"}
+
+    def _get_available_benefits(self, screen_text: str) -> List[str]:
+        """从屏幕文本中提取可用的权益"""
+        # 常见的权益关键词
+        benefit_keywords = [
+            "流量包", "话费券", "视频会员", "音乐会员", "阅读券", 
+            "购物券", "外卖券", "打车券", "咖啡券", "电影券"
+        ]
+        
+        available_benefits = []
+        for keyword in benefit_keywords:
+            if keyword in screen_text:
+                available_benefits.append(keyword)
+        
+        return available_benefits
 

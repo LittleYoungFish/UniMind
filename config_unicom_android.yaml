@@ -4,7 +4,7 @@
 # Android设备连接配置
 android_connection:
   device_id: "9HTOC6AEHQYL4HAM"  # 用户需要提供设备序列号
-  adb_path: "adb"  # ADB工具路径
+  adb_path: "./platform-tools/adb.exe"  # ADB工具路径
   scrcpy_path: "scrcpy"  # Scrcpy工具路径
   connection_timeout: 30
   screenshot_path: "./screenshots/"
@@ -131,6 +131,28 @@ unicom_operations:
       description: "办理各类增值服务"
       app: "unicom_app"
       keywords: ["增值", "服务", "办理"]
+
+  # 用户权益操作
+  user_benefits:
+    - name: "权益领取业务"
+      description: "完整的用户权益领取流程，包括领券中心、权益超市、PLUS会员等"
+      app: "unicom_app"
+      keywords: ["权益", "领取", "优惠券", "领券中心", "权益超市", "PLUS会员"]
+      
+    - name: "领取优惠券"
+      description: "在领券中心领取所有可用的优惠券"
+      app: "unicom_app"
+      keywords: ["优惠券", "领券", "领取", "券"]
+      
+    - name: "权益超市消费"
+      description: "在权益超市进行消费或浏览权益商品"
+      app: "unicom_app"
+      keywords: ["权益超市", "消费", "权益商品"]
+      
+    - name: "PLUS会员权益"
+      description: "管理PLUS会员权益，包括查看、领取、办理等"
+      app: "unicom_app"
+      keywords: ["PLUS会员", "会员权益", "会员", "PLUS"]
   
   # 网络服务操作
   network_services:
@@ -207,6 +229,11 @@ user_demand_types:
     description: "办理各类增值服务和优惠活动"
     keywords: ["增值", "服务", "优惠", "活动", "会员"]
     priority: "low"
+    
+  - type: "用户权益"
+    description: "用户权益领取和管理，包括优惠券、权益超市、PLUS会员等"
+    keywords: ["权益", "领取", "优惠券", "领券中心", "权益超市", "PLUS会员", "会员权益"]
+    priority: "medium"
     
   - type: "客户服务"
     description: "客服咨询、投诉建议、服务预约等"
