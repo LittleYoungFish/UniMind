@@ -664,30 +664,62 @@ class UnicomAndroidTools:
     def _navigate_to_my_page(self) -> Dict[str, Any]:
         """导航到"我的"页面"""
         try:
-            # 查找并点击"我的"按钮 - 使用精确坐标
-            find_result = self.unicom_find_element_by_text("我的")
-            if not find_result["success"] or not find_result.get("found"):
-                # 如果找不到，直接使用精确坐标点击
-                success, output = self._execute_adb_command("shell input tap 972 2167")
-                if success:
-                    time.sleep(2)
-                    return {"success": True, "message": "成功点击我的按钮 (精确坐标)"}
-                else:
-                    return {"success": False, "message": "未找到我的按钮"}
+            import re
             
-            # 点击"我的"
-            tap_result = self.unicom_tap_element("我的")
-            if not tap_result["success"]:
-                # 如果常规点击失败，使用精确坐标
-                success, output = self._execute_adb_command("shell input tap 972 2167")
+            def get_ui_dump():
+                """获取UI布局信息"""
+                success, _ = self._execute_adb_command("shell uiautomator dump /sdcard/ui_current.xml")
                 if success:
-                    time.sleep(2)
-                    return {"success": True, "message": "成功点击我的按钮 (备用坐标)"}
-                else:
-                    return {"success": False, "message": "点击我的按钮失败"}
+                    success, content = self._execute_adb_command("shell cat /sdcard/ui_current.xml")
+                    if success:
+                        return content
+                return None
+
+            def find_element_by_text(ui_content, text):
+                """从UI内容中查找包含指定文本的元素坐标"""
+                if not ui_content:
+                    return None
+                
+                # 使用正则表达式查找包含指定文本的元素及其bounds
+                pattern = rf'text="{text}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                # 如果没找到精确匹配，尝试模糊匹配
+                pattern = rf'text="[^"]*{text}[^"]*"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                return None
+
+            def click_coordinate(x, y):
+                """点击指定坐标"""
+                success, output = self._execute_adb_command(f"shell input tap {x} {y}")
+                return success
+
+            # 智能查找并点击"我的"按钮
+            ui_content = get_ui_dump()
+            my_pos = find_element_by_text(ui_content, "我的")
             
-            # 等待页面加载
-            time.sleep(2)
+            if not my_pos:
+                # 如果找不到文本，使用之前分析的精确坐标
+                my_pos = (972, 2167)
+            
+            success = click_coordinate(my_pos[0], my_pos[1])
+            if not success:
+                return {"success": False, "message": "点击我的按钮失败"}
+            
+            time.sleep(3)  # 等待页面加载
             
             return {"success": True, "message": "成功进入我的页面"}
             
@@ -697,68 +729,126 @@ class UnicomAndroidTools:
     def _claim_coupons_in_center(self) -> Dict[str, Any]:
         """在领券中心领取优惠券"""
         try:
-            claimed_coupons = []
+            import re
             
-            # 尝试查找并点击"领券中心"
-            # 首先通过UI Automator查找
-            success, output = self._execute_adb_command('shell uiautomator dump /sdcard/ui_dump.xml')
-            if success:
-                success, xml_content = self._execute_adb_command('shell cat /sdcard/ui_dump.xml')
-                if success and ("领券中心" in xml_content or "领券" in xml_content):
-                    # 找到了领券中心元素，尝试点击
-                    tap_result = self.unicom_tap_element("领券中心")
-                    if not tap_result["success"]:
-                        # 如果直接点击失败，尝试滑动查找
-                        for _ in range(3):
-                            self._execute_adb_command("shell input swipe 500 800 500 400 500")
-                            time.sleep(1)
-                            tap_result = self.unicom_tap_element("领券中心")
-                            if tap_result["success"]:
-                                break
+            def get_ui_dump():
+                """获取UI布局信息"""
+                success, _ = self._execute_adb_command("shell uiautomator dump /sdcard/ui_current.xml")
+                if success:
+                    success, content = self._execute_adb_command("shell cat /sdcard/ui_current.xml")
+                    if success:
+                        return content
+                return None
+
+            def find_element_by_text(ui_content, text):
+                """从UI内容中查找包含指定文本的元素坐标"""
+                if not ui_content:
+                    return None
+                
+                # 使用正则表达式查找包含指定文本的元素及其bounds
+                pattern = rf'text="{text}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                # 如果没找到精确匹配，尝试模糊匹配
+                pattern = rf'text="[^"]*{text}[^"]*"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                return None
+
+            def find_clickable_elements_with_text(ui_content, keywords):
+                """查找包含关键词的可点击元素"""
+                elements = []
+                for keyword in keywords:
+                    # 方法1: 查找包含关键词且可点击的元素
+                    pattern1 = rf'clickable="true"[^>]*text="{keyword}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                    matches1 = re.findall(pattern1, ui_content)
                     
-                    if tap_result["success"]:
-                        # 等待页面加载
-                        time.sleep(3)
+                    for match in matches1:
+                        x1, y1, x2, y2 = map(int, match)
+                        center_x = (x1 + x2) // 2
+                        center_y = (y1 + y2) // 2
+                        elements.append((center_x, center_y, keyword))
+                    
+                    # 方法2: 如果没找到精确匹配，尝试模糊匹配
+                    if not matches1:
+                        pattern2 = rf'text="{keyword}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                        matches2 = re.findall(pattern2, ui_content)
                         
-                        # 循环查找所有"领取"按钮并点击
-                        max_attempts = 10  # 最多尝试10次
-                        for attempt in range(max_attempts):
-                            # 获取UI dump查找领取按钮
-                            success, output = self._execute_adb_command('shell uiautomator dump /sdcard/ui_dump.xml')
-                            if success:
-                                success, xml_content = self._execute_adb_command('shell cat /sdcard/ui_dump.xml')
-                                if success and "领取" in xml_content:
-                                    # 尝试点击领取按钮
-                                    tap_result = self.unicom_tap_element("领取")
-                                    if tap_result["success"]:
-                                        claimed_coupons.append(f"优惠券_{attempt + 1}")
-                                        time.sleep(2)  # 等待领取完成
-                                        
-                                        # 检查是否需要返回
-                                        self._execute_adb_command("shell input keyevent KEYCODE_BACK")
-                                        time.sleep(1)
-                                    else:
-                                        break
-                                else:
-                                    break  # 没有更多可领取的券
-                            else:
-                                break
+                        for match in matches2:
+                            x1, y1, x2, y2 = map(int, match)
+                            center_x = (x1 + x2) // 2
+                            center_y = (y1 + y2) // 2
+                            elements.append((center_x, center_y, keyword))
+                
+                return elements
+
+            def click_coordinate(x, y):
+                """点击指定坐标"""
+                success, output = self._execute_adb_command(f"shell input tap {x} {y}")
+                return success
+
+            # 智能查找并点击"领券中心"
+            ui_content = get_ui_dump()
+            coupon_pos = find_element_by_text(ui_content, "领券中心")
+            
+            if coupon_pos:
+                success = click_coordinate(coupon_pos[0], coupon_pos[1])
+                if success:
+                    time.sleep(3)
+                    
+                    # 智能循环领取优惠券
+                    max_attempts = 10  # 最多尝试领取10个优惠券
+                    claimed_count = 0
+                    
+                    for attempt in range(max_attempts):
+                        ui_content = get_ui_dump()
                         
-                        # 返回到我的页面
-                        self._execute_adb_command("shell input keyevent KEYCODE_BACK")
-                        time.sleep(2)
+                        # 查找当前页面的"立即领取"按钮
+                        claim_buttons = find_clickable_elements_with_text(ui_content, ["立即领取", "领取"])
                         
-                        return {
-                            "success": True, 
-                            "message": f"成功领取 {len(claimed_coupons)} 张优惠券",
-                            "claimed_coupons": claimed_coupons
-                        }
-                    else:
-                        return {"success": False, "message": "点击领券中心失败"}
+                        if not claim_buttons:
+                            break
+                        
+                        # 点击第一个找到的"立即领取"按钮
+                        x, y, keyword = claim_buttons[0]
+                        success = click_coordinate(x, y)
+                        
+                        if success:
+                            claimed_count += 1
+                            time.sleep(2)  # 等待领取完成
+                            
+                            # 检查是否跳转到了新页面（如果跳转了，需要返回）
+                            time.sleep(2)
+                            self._execute_adb_command("shell input keyevent KEYCODE_BACK")
+                            time.sleep(2)
+                        else:
+                            break
+                    
+                    # 返回到我的页面
+                    self._execute_adb_command("shell input keyevent KEYCODE_BACK")
+                    time.sleep(2)
+                    
+                    return {
+                        "success": True, 
+                        "message": f"成功领取 {claimed_count} 张优惠券",
+                        "claimed_coupons": [f"优惠券_{i+1}" for i in range(claimed_count)]
+                    }
                 else:
-                    return {"success": False, "message": "未找到领券中心"}
+                    return {"success": False, "message": "点击领券中心失败"}
             else:
-                return {"success": False, "message": "UI分析失败"}
+                return {"success": False, "message": "未找到领券中心"}
             
         except Exception as e:
             return {"success": False, "message": f"领取优惠券失败: {str(e)}"}
@@ -766,29 +856,62 @@ class UnicomAndroidTools:
     def _navigate_to_service_page(self) -> Dict[str, Any]:
         """导航到服务页面"""
         try:
-            # 查找并点击"服务"按钮 - 使用精确坐标
-            find_result = self.unicom_find_element_by_text("服务")
-            if not find_result["success"] or not find_result.get("found"):
-                # 如果找不到，直接使用精确坐标点击
-                success, output = self._execute_adb_command("shell input tap 324 2167")
-                if success:
-                    time.sleep(2)
-                    return {"success": True, "message": "成功点击服务按钮 (精确坐标)"}
-                else:
-                    return {"success": False, "message": "未找到服务按钮"}
+            import re
             
-            tap_result = self.unicom_tap_element("服务")
-            if not tap_result["success"]:
-                # 如果常规点击失败，使用精确坐标
-                success, output = self._execute_adb_command("shell input tap 324 2167")
+            def get_ui_dump():
+                """获取UI布局信息"""
+                success, _ = self._execute_adb_command("shell uiautomator dump /sdcard/ui_current.xml")
                 if success:
-                    time.sleep(2)
-                    return {"success": True, "message": "成功点击服务按钮 (备用坐标)"}
-                else:
-                    return {"success": False, "message": "点击服务按钮失败"}
+                    success, content = self._execute_adb_command("shell cat /sdcard/ui_current.xml")
+                    if success:
+                        return content
+                return None
+
+            def find_element_by_text(ui_content, text):
+                """从UI内容中查找包含指定文本的元素坐标"""
+                if not ui_content:
+                    return None
+                
+                # 使用正则表达式查找包含指定文本的元素及其bounds
+                pattern = rf'text="{text}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                # 如果没找到精确匹配，尝试模糊匹配
+                pattern = rf'text="[^"]*{text}[^"]*"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                return None
+
+            def click_coordinate(x, y):
+                """点击指定坐标"""
+                success, output = self._execute_adb_command(f"shell input tap {x} {y}")
+                return success
+
+            # 智能查找并点击"服务"按钮
+            ui_content = get_ui_dump()
+            service_pos = find_element_by_text(ui_content, "服务")
             
-            # 等待页面加载
-            time.sleep(2)
+            if not service_pos:
+                # 使用预分析的坐标
+                service_pos = (324, 2167)
+            
+            success = click_coordinate(service_pos[0], service_pos[1])
+            if not success:
+                return {"success": False, "message": "点击服务按钮失败"}
+            
+            time.sleep(3)  # 等待页面加载
             
             return {"success": True, "message": "成功进入服务页面"}
             
@@ -838,14 +961,68 @@ class UnicomAndroidTools:
     def _handle_plus_membership(self, user_interaction_callback=None) -> Dict[str, Any]:
         """处理PLUS会员"""
         try:
-            # 在权益界面查找"PLUS会员"
-            find_result = self.unicom_find_element_by_text("PLUS会员")
-            if not find_result["success"] or not find_result.get("found"):
-                return {"success": False, "message": "未找到PLUS会员"}
+            import re
             
-            tap_result = self.unicom_tap_element("PLUS会员")
-            if not tap_result["success"]:
-                return {"success": False, "message": "点击PLUS会员失败"}
+            def get_ui_dump():
+                """获取UI布局信息"""
+                success, _ = self._execute_adb_command("shell uiautomator dump /sdcard/ui_current.xml")
+                if success:
+                    success, content = self._execute_adb_command("shell cat /sdcard/ui_current.xml")
+                    if success:
+                        return content
+                return None
+
+            def find_element_by_text(ui_content, text):
+                """从UI内容中查找包含指定文本的元素坐标"""
+                if not ui_content:
+                    return None
+                
+                # 使用正则表达式查找包含指定文本的元素及其bounds
+                pattern = rf'text="{text}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                # 如果没找到精确匹配，尝试模糊匹配
+                pattern = rf'text="[^"]*{text}[^"]*"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+                match = re.search(pattern, ui_content)
+                
+                if match:
+                    x1, y1, x2, y2 = map(int, match.groups())
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    return (center_x, center_y)
+                
+                return None
+
+            def click_coordinate(x, y):
+                """点击指定坐标"""
+                success, output = self._execute_adb_command(f"shell input tap {x} {y}")
+                return success
+
+            # 向下滑动并智能查找PLUS会员
+            plus_found = False
+            for scroll_attempt in range(8):
+                ui_content = get_ui_dump()
+                plus_pos = find_element_by_text(ui_content, "PLUS会员")
+                
+                if plus_pos:
+                    success = click_coordinate(plus_pos[0], plus_pos[1])
+                    if success:
+                        time.sleep(3)
+                        plus_found = True
+                        break
+                
+                if scroll_attempt < 7:  # 不是最后一次尝试
+                    self._execute_adb_command("shell input swipe 500 1000 500 100 500")
+                    time.sleep(1)
+            
+            if not plus_found:
+                return {"success": False, "message": "未找到PLUS会员"}
             
             # 等待页面加载
             time.sleep(3)
@@ -955,48 +1132,21 @@ class UnicomAndroidTools:
             if not service_result["success"]:
                 return {"success": False, "message": "无法进入服务页面", "details": service_result}
             
-            # 步骤5: 处理权益超市交互（如果需要）
-            if user_responses and "consumption_choice" in user_responses:
-                consumption_choice = user_responses["consumption_choice"]
-                if consumption_choice == "是":
-                    # 处理权益超市
-                    market_result = self._handle_benefits_market(lambda q, opts: "是")
-                    result["steps"].append({"step": "benefits_market", "result": market_result})
-                    return {"success": True, "message": "用户选择消费，请手动操作", "result": result}
-                else:
-                    result["steps"].append({"step": "benefits_market", "choice": "declined"})
-            else:
-                # 需要询问用户关于权益超市
-                result["interactions"].append({
-                    "type": "choice",
-                    "question": "是否需要在权益超市进行消费？",
-                    "options": ["是", "否"],
-                    "key": "consumption_choice"
-                })
-                return {"success": True, "message": "需要用户交互", "result": result}
+            # 步骤5: 处理权益超市（自动跳过）
+            result["steps"].append({"step": "benefits_market", "choice": "自动跳过权益超市"})
             
-            # 步骤6: 处理PLUS会员
-            def interactive_callback(question, options):
+            # 步骤6: 处理PLUS会员（自动处理）
+            def auto_callback(question, options):
                 if "PLUS会员" in question:
-                    return user_responses.get("is_plus_member", "否")
+                    return "否"  # 默认不是PLUS会员
                 elif "办理" in question:
-                    return user_responses.get("apply_membership", "否")
+                    return "否"  # 默认不办理
                 elif "权益" in question:
-                    return user_responses.get("benefit_choice", options[0] if options else "")
+                    return options[0] if options else ""  # 选择第一个选项
                 return "否"
             
-            plus_result = self._handle_plus_membership(interactive_callback if user_responses else None)
+            plus_result = self._handle_plus_membership(auto_callback)
             result["steps"].append({"step": "plus_membership", "result": plus_result})
-            
-            # 如果没有用户响应，需要收集交互信息
-            if not user_responses:
-                result["interactions"].append({
-                    "type": "choice",
-                    "question": "您是PLUS会员吗？",
-                    "options": ["是", "否"],
-                    "key": "is_plus_member"
-                })
-                return {"success": True, "message": "需要用户交互", "result": result}
             
             return {"success": True, "message": "用户权益领取流程完成", "result": result}
                 

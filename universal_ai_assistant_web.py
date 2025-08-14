@@ -18,6 +18,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from agilemind.universal_ai_assistant import universal_ai_assistant, run_universal_assistant
+from agilemind.tool.unicom_android_tools import UnicomAndroidTools
 
 
 def init_session_state():
@@ -358,8 +359,12 @@ def render_chat_interface(api_key: str, device_id: str):
                         status_text.text("⚡ 执行操作指令...")
                     time.sleep(1)
                 
-                # 调用AI助手
-                result = universal_ai_assistant(user_input, device_id)
+                # 检查是否是权益领取请求，如果是则直接调用权益领取功能
+                if _is_benefits_claim_request(user_input):
+                    result = handle_benefits_claim_request(user_input, device_id)
+                else:
+                    # 调用AI助手
+                    result = universal_ai_assistant(user_input, device_id)
                 
                 progress_bar.progress(100)
                 status_text.text("✅ 执行完成!")
@@ -409,6 +414,9 @@ def render_task_results():
         # 检查是否为流量查询结果
         elif _is_data_usage_query_result(result):
             render_data_usage_query_result(result)
+        # 检查是否为权益领取结果
+        elif _is_benefits_claim_result(result):
+            render_benefits_claim_result(result)
         else:
             render_general_task_result(result)
 
@@ -421,6 +429,58 @@ def _is_data_usage_query_result(result):
     """检查是否是流量查询结果"""
     user_input = result.get("user_input", "").lower()
     return any(keyword in user_input for keyword in ['流量', '剩余流量', '通用流量', '剩余通用流量', '查询流量', '数据流量', '流量使用'])
+
+def _is_benefits_claim_result(result):
+    """检查是否是权益领取结果"""
+    user_input = result.get("user_input", "").lower()
+    return any(keyword in user_input for keyword in ['权益', '领取', '优惠券', '领券', '权益领取', '积分权益', '联通积分', '会员权益'])
+
+def _is_benefits_claim_request(user_input):
+    """检查是否是权益领取请求"""
+    user_input_lower = user_input.lower()
+    return any(keyword in user_input_lower for keyword in ['权益领取', '领取权益', '优惠券', '领券', '积分权益', '联通积分', '会员权益', '权益'])
+
+def handle_benefits_claim_request(user_input, device_id):
+    """处理权益领取请求"""
+    try:
+        # 创建联通工具实例
+        tools = UnicomAndroidTools()
+        
+        # 连接设备
+        if device_id:
+            connect_result = tools.unicom_android_connect(device_id=device_id)
+            if not connect_result["success"]:
+                return {
+                    "success": False,
+                    "error": f"设备连接失败: {connect_result.get('message', '未知错误')}",
+                    "user_input": user_input,
+                    "target_app": "中国联通",
+                    "task_category": "权益领取"
+                }
+        
+        # 执行权益领取
+        result = tools.unicom_user_benefits_claim_interactive()
+        
+        # 格式化返回结果
+        return {
+            "success": result.get("success", False),
+            "result": result.get("result", {}),
+            "user_response": result.get("message", "权益领取操作完成"),
+            "user_input": user_input,
+            "target_app": "中国联通",
+            "task_category": "权益领取",
+            "execution_steps": len(result.get("result", {}).get("steps", [])),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"权益领取执行失败: {str(e)}",
+            "user_input": user_input,
+            "target_app": "中国联通",
+            "task_category": "权益领取"
+        }
 
 def render_balance_query_result(result):
     """渲染话费查询专用结果界面"""
@@ -604,6 +664,109 @@ def render_data_usage_query_result(result):
     else:
         # 查询失败的情况
         st.error("❌ 流量查询失败")
+        if "result" in result:
+            st.write(f"**结果信息:** {result['result']}")
+    
+    # 通用操作按钮和详细信息
+    render_common_result_section(result)
+
+def render_benefits_claim_result(result):
+    """渲染权益领取专用结果界面"""
+    st.subheader("🎁 权益领取结果")
+    
+    # 检查是否有权益领取相关的结果
+    benefits_info = None
+    if "result" in result and isinstance(result["result"], dict):
+        if "steps" in result["result"]:
+            benefits_info = result["result"]
+        # 检查结果字符串中是否包含权益信息
+        elif "权益领取" in str(result.get("result", "")) or "优惠券" in str(result.get("result", "")):
+            result_str = str(result["result"])
+            benefits_info = {
+                "message": result_str,
+                "success": result.get("success", False)
+            }
+    
+    if benefits_info and benefits_info.get("steps"):
+        # 显示权益领取结果 - 突出显示
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            # 统计成功的步骤
+            successful_steps = sum(1 for step in benefits_info["steps"] if step.get("result", {}).get("success", False))
+            total_steps = len(benefits_info["steps"])
+            
+            # 检查是否有优惠券信息
+            claimed_coupons = 0
+            for step in benefits_info["steps"]:
+                if step.get("step") == "claim_coupons" and step.get("result", {}).get("success"):
+                    claimed_coupons = len(step["result"].get("claimed_coupons", []))
+            
+            st.markdown(
+                f"""
+                <div style='
+                    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                    padding: 2rem;
+                    border-radius: 1rem;
+                    text-align: center;
+                    color: white;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+                '>
+                    <h1 style='margin: 0; font-size: 3rem; font-weight: bold;'>
+                        🎁 {claimed_coupons}
+                    </h1>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.2rem; opacity: 0.9;'>
+                        成功领取优惠券
+                    </p>
+                    <small style='opacity: 0.7;'>
+                        执行步骤: {successful_steps}/{total_steps} 完成
+                    </small>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        st.markdown("---")
+        
+        # 详细步骤信息
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📊 执行步骤")
+            for i, step in enumerate(benefits_info["steps"], 1):
+                step_name = step.get("step", "未知步骤")
+                step_result = step.get("result", {})
+                step_success = step_result.get("success", False)
+                step_message = step_result.get("message", "")
+                choice = step.get("choice", "")
+                
+                status_icon = "✅" if step_success else "❌"
+                display_message = choice if choice else step_message
+                
+                if step_name == "claim_coupons" and step_success:
+                    claimed_coupons_list = step_result.get("claimed_coupons", [])
+                    if claimed_coupons_list:
+                        display_message += f" ({len(claimed_coupons_list)} 张)"
+                
+                st.info(f"{status_icon} **{step_name}**: {display_message}")
+        
+        with col2:
+            st.markdown("#### ✅ 执行状态")
+            st.success("✅ 权益领取完成")
+            st.success("✅ 自动化操作完成")
+            if claimed_coupons > 0:
+                st.success(f"✅ 成功领取 {claimed_coupons - 1} 张优惠券")
+            
+            # 权益领取建议
+            if claimed_coupons >= 3:
+                st.info("💡 优惠券领取充足，记得及时使用")
+            elif claimed_coupons > 0:
+                st.info("💡 已领取部分优惠券，可稍后再次尝试")
+            else:
+                st.warning("⚠️ 暂无可领取的优惠券")
+    
+    else:
+        # 权益领取失败的情况
+        st.error("❌ 权益领取失败")
         if "result" in result:
             st.write(f"**结果信息:** {result['result']}")
     
