@@ -29,6 +29,10 @@ class ScenarioMode(Enum):
     DRIVING = "driving"     # 驾驶模式
     MEETING = "meeting"     # 会议模式
     STUDY = "study"         # 学习模式
+    DELIVERY = "delivery"   # 外卖模式
+    UNKNOWN = "unknown"     # 陌生电话模式
+    BUSY = "busy"           # 忙碌模式
+    HOSPITAL = "hospital"   # 医院模式
     CUSTOM = "custom"       # 自定义模式
 
 
@@ -74,9 +78,11 @@ class PhoneAutoAnswerManager:
         """初始化代接管理器"""
         self.adb_path = adb_path
         self.logger = self._setup_logging()
-        self.current_scenario = ScenarioMode.WORK
+        self.current_scenario = ScenarioMode.BUSY  # 默认为忙碌模式
         self.is_enabled = False
         self.call_records: List[CallRecord] = []
+        self.ring_delay_seconds = 10  # 响铃延迟时间（秒）
+        self.custom_responses = {}  # 自定义回复语
         
         # 创建必要的目录
         self.data_dir = "data/phone_auto_answer"
@@ -87,6 +93,7 @@ class PhoneAutoAnswerManager:
         # 加载配置
         self.scenarios = self._load_scenario_configs()
         self._load_call_records()
+        self._load_custom_responses()
         
         self.logger.info("📞 电话自动代接管理器初始化完成")
     
@@ -168,6 +175,38 @@ class PhoneAutoAnswerManager:
             response_text="我正在学习中，需要专注。请发送信息说明来意，稍后会回复您。感谢理解。"
         )
         
+        # 外卖模式
+        scenarios[ScenarioMode.DELIVERY] = ScenarioConfig(
+            mode=ScenarioMode.DELIVERY,
+            name="外卖模式",
+            description="外卖配送场景回复",
+            response_text="您好，请把外卖放在外卖柜里，谢谢。如果没有外卖柜，请放在门口，我稍后取。"
+        )
+        
+        # 陌生电话模式
+        scenarios[ScenarioMode.UNKNOWN] = ScenarioConfig(
+            mode=ScenarioMode.UNKNOWN,
+            name="陌生电话模式",
+            description="接听陌生电话并记录",
+            response_text="您好，我暂时无法接听电话。请您说明来意，我会记录您的留言并尽快回复。"
+        )
+        
+        # 忙碌模式（默认模式）
+        scenarios[ScenarioMode.BUSY] = ScenarioConfig(
+            mode=ScenarioMode.BUSY,
+            name="忙碌模式",
+            description="默认忙碌回复",
+            response_text="对不起，我现在很忙无法接听电话。请稍后再拨，或发送短信说明事由。谢谢理解。"
+        )
+        
+        # 医院模式
+        scenarios[ScenarioMode.HOSPITAL] = ScenarioConfig(
+            mode=ScenarioMode.HOSPITAL,
+            name="医院模式",
+            description="医院等安静场所回复",
+            response_text="我现在在医院等安静场所，不方便接听电话。有急事请发短信，我会尽快回复。"
+        )
+        
         self.logger.info(f"✅ 加载了 {len(scenarios)} 个场景配置")
         return scenarios
     
@@ -203,6 +242,90 @@ class PhoneAutoAnswerManager:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             self.logger.error(f"❌ 保存通话记录失败: {e}")
+    
+    def _load_custom_responses(self):
+        """加载自定义回复语"""
+        custom_file = os.path.join(self.data_dir, "custom_responses.json")
+        try:
+            if os.path.exists(custom_file):
+                with open(custom_file, 'r', encoding='utf-8') as f:
+                    self.custom_responses = json.load(f)
+                    self.logger.info(f"📝 加载了 {len(self.custom_responses)} 个自定义回复")
+            else:
+                self.custom_responses = {}
+        except Exception as e:
+            self.logger.warning(f"⚠️ 加载自定义回复失败: {e}")
+            self.custom_responses = {}
+    
+    def _save_custom_responses(self):
+        """保存自定义回复语"""
+        custom_file = os.path.join(self.data_dir, "custom_responses.json")
+        try:
+            with open(custom_file, 'w', encoding='utf-8') as f:
+                json.dump(self.custom_responses, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            self.logger.error(f"❌ 保存自定义回复失败: {e}")
+    
+    def set_custom_response(self, scenario: str, response_text: str) -> Dict[str, Any]:
+        """设置自定义回复语"""
+        try:
+            # 验证场景模式
+            scenario_mode = ScenarioMode(scenario.lower())
+            
+            # 保存自定义回复
+            self.custom_responses[scenario_mode.value] = response_text
+            self._save_custom_responses()
+            
+            self.logger.info(f"✅ 设置 {scenario_mode.value} 模式自定义回复")
+            
+            return {
+                "success": True,
+                "scenario": scenario_mode.value,
+                "response_text": response_text,
+                "message": f"成功设置{self.scenarios[scenario_mode].name}的自定义回复"
+            }
+            
+        except ValueError:
+            return {
+                "success": False,
+                "error": f"无效的场景模式: {scenario}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"设置自定义回复失败: {str(e)}"
+            }
+    
+    def get_custom_responses(self) -> Dict[str, str]:
+        """获取所有自定义回复语"""
+        return self.custom_responses.copy()
+    
+    def set_ring_delay(self, seconds: int) -> Dict[str, Any]:
+        """设置响铃延迟时间"""
+        try:
+            if seconds < 0 or seconds > 60:
+                return {
+                    "success": False,
+                    "error": "响铃延迟时间必须在0-60秒之间"
+                }
+            
+            old_delay = self.ring_delay_seconds
+            self.ring_delay_seconds = seconds
+            
+            self.logger.info(f"⏰ 响铃延迟时间已设置为 {seconds} 秒")
+            
+            return {
+                "success": True,
+                "old_delay": old_delay,
+                "new_delay": seconds,
+                "message": f"响铃延迟时间已设置为 {seconds} 秒"
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"设置响铃延迟失败: {str(e)}"
+            }
     
     def check_device_connection(self) -> bool:
         """检查设备连接状态"""
@@ -255,7 +378,7 @@ class PhoneAutoAnswerManager:
         return self.current_scenario
     
     def simulate_auto_answer_call(self, phone_number: str, caller_name: str = None) -> Dict[str, Any]:
-        """模拟自动代接电话（基础版本）"""
+        """模拟自动代接电话（增强版本）"""
         start_time = datetime.now()
         current_scenario = self.get_current_scenario()
         scenario_config = self.scenarios[current_scenario]
@@ -263,16 +386,35 @@ class PhoneAutoAnswerManager:
         self.logger.info(f"📞 收到来电: {phone_number} ({caller_name or '未知'}) - 场景: {scenario_config.name}")
         
         try:
-            # 模拟接听电话的延迟
-            time.sleep(2)
+            # 响铃延迟（如果未开启自动代接，则使用默认延迟）
+            if not self.is_enabled:
+                self.logger.info(f"⏰ 自动代接未开启，响铃 {self.ring_delay_seconds} 秒后回复")
+                time.sleep(self.ring_delay_seconds)
+                # 使用忙碌模式的默认回复
+                response_text = self.scenarios[ScenarioMode.BUSY].response_text
+                current_scenario = ScenarioMode.BUSY
+            else:
+                # 模拟接听电话的延迟
+                time.sleep(2)
+                
+                # 获取回复文本（优先使用自定义回复）
+                if current_scenario.value in self.custom_responses:
+                    response_text = self.custom_responses[current_scenario.value]
+                    self.logger.info(f"🎨 使用自定义回复")
+                else:
+                    response_text = scenario_config.response_text
+                    self.logger.info(f"📋 使用默认回复")
             
-            # 播放自动回复
-            response_text = scenario_config.response_text
             self.logger.info(f"🔊 播放回复: {response_text[:50]}...")
             
             # 模拟语音播放时长（根据文字长度估算）
             estimated_duration = len(response_text) * 0.15  # 约每个字0.15秒
             time.sleep(min(estimated_duration, 10))  # 最长不超过10秒
+            
+            # 如果是陌生电话模式，记录通话内容
+            if current_scenario == ScenarioMode.UNKNOWN:
+                self.logger.info(f"📝 陌生电话，开始记录通话内容...")
+                time.sleep(5)  # 模拟记录时间
             
             # 模拟挂断
             time.sleep(1)
@@ -288,13 +430,14 @@ class PhoneAutoAnswerManager:
                 scenario_mode=current_scenario,
                 response_played=response_text,
                 duration_seconds=duration,
-                auto_answered=True
+                auto_answered=self.is_enabled
             )
             
             self.call_records.append(call_record)
             self._save_call_records()
             
-            self.logger.info(f"✅ 自动代接完成，耗时 {duration:.1f} 秒")
+            status = "自动代接" if self.is_enabled else "延迟回复"
+            self.logger.info(f"✅ {status}完成，耗时 {duration:.1f} 秒")
             
             return {
                 "success": True,
@@ -493,6 +636,97 @@ def phone_get_status() -> Dict[str, Any]:
         包含状态信息的字典
     """
     return phone_manager.get_status_info()
+
+
+@tool(
+    "phone_set_custom_response",
+    description="设置指定场景的自定义回复语",
+    group="phone_automation"
+)
+def phone_set_custom_response(scenario: str, response_text: str) -> Dict[str, Any]:
+    """
+    设置自定义回复语
+    
+    Args:
+        scenario: 场景模式 (work/rest/driving/meeting/study/delivery/unknown/busy/hospital)
+        response_text: 自定义回复文本
+        
+    Returns:
+        包含设置结果的字典
+    """
+    return phone_manager.set_custom_response(scenario, response_text)
+
+
+@tool(
+    "phone_get_custom_responses",
+    description="获取所有自定义回复语设置",
+    group="phone_automation"
+)
+def phone_get_custom_responses() -> Dict[str, str]:
+    """
+    获取自定义回复语
+    
+    Returns:
+        自定义回复语字典
+    """
+    return phone_manager.get_custom_responses()
+
+
+@tool(
+    "phone_set_ring_delay",
+    description="设置响铃延迟时间（秒）",
+    group="phone_automation"
+)
+def phone_set_ring_delay(seconds: int) -> Dict[str, Any]:
+    """
+    设置响铃延迟时间
+    
+    Args:
+        seconds: 延迟时间（0-60秒）
+        
+    Returns:
+        包含设置结果的字典
+    """
+    return phone_manager.set_ring_delay(seconds)
+
+
+@tool(
+    "phone_simulate_call",
+    description="模拟来电以测试智能代接功能",
+    group="phone_automation"
+)
+def phone_simulate_call(phone_number: str, caller_name: str = None, scenario: str = None) -> Dict[str, Any]:
+    """
+    模拟来电测试
+    
+    Args:
+        phone_number: 来电号码
+        caller_name: 来电者姓名（可选）
+        scenario: 强制使用的场景模式（可选）
+        
+    Returns:
+        包含代接结果的字典
+    """
+    # 如果指定了场景，临时切换
+    original_scenario = None
+    if scenario:
+        try:
+            original_scenario = phone_manager.current_scenario
+            phone_manager.current_scenario = ScenarioMode(scenario.lower())
+        except ValueError:
+            return {
+                "success": False,
+                "error": f"无效的场景模式: {scenario}"
+            }
+    
+    # 执行模拟代接
+    result = phone_manager.simulate_auto_answer_call(phone_number, caller_name)
+    
+    # 恢复原场景
+    if original_scenario:
+        phone_manager.current_scenario = original_scenario
+    
+    return result
 
 
 @tool(

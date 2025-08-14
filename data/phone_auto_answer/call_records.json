@@ -43,5 +43,50 @@
     "response_played": "您好，我正在工作中，无法接听电话。如有紧急事务请发送短信，我会尽快回复。谢谢理解。",
     "duration_seconds": 9.152327,
     "auto_answered": true
+  },
+  {
+    "phone_number": "138-0000-1111",
+    "caller_name": "张三",
+    "call_time": "2025-08-14T15:10:39.035892",
+    "scenario_mode": "busy",
+    "response_played": "对不起，我现在很忙无法接听电话。请稍后再拨，或发送短信说明事由。谢谢理解。",
+    "duration_seconds": 16.557444,
+    "auto_answered": false
+  },
+  {
+    "phone_number": "400-123-4567",
+    "caller_name": "外卖小哥",
+    "call_time": "2025-08-14T15:10:55.593336",
+    "scenario_mode": "busy",
+    "response_played": "对不起，我现在很忙无法接听电话。请稍后再拨，或发送短信说明事由。谢谢理解。",
+    "duration_seconds": 16.555582,
+    "auto_answered": false
+  },
+  {
+    "phone_number": "150-9999-8888",
+    "caller_name": null,
+    "call_time": "2025-08-14T15:11:12.148918",
+    "scenario_mode": "busy",
+    "response_played": "对不起，我现在很忙无法接听电话。请稍后再拨，或发送短信说明事由。谢谢理解。",
+    "duration_seconds": 16.556216,
+    "auto_answered": false
+  },
+  {
+    "phone_number": "186-7777-6666",
+    "caller_name": "朋友",
+    "call_time": "2025-08-14T15:11:28.705134",
+    "scenario_mode": "busy",
+    "response_played": "对不起，我现在很忙无法接听电话。请稍后再拨，或发送短信说明事由。谢谢理解。",
+    "duration_seconds": 16.554578,
+    "auto_answered": false
+  },
+  {
+    "phone_number": "138-1234-5678",
+    "caller_name": "测试联系人",
+    "call_time": "2025-08-14T15:21:14.248002",
+    "scenario_mode": "work",
+    "response_played": "您好，我正在工作中，无法接听电话。如有紧急事务请发送短信，我会尽快回复。谢谢理解。",
+    "duration_seconds": 9.153182,
+    "auto_answered": true
   }
 ]

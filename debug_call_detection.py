@@ -1,218 +1,179 @@
 #!/usr/bin/env python3
-"""调试通话检测逻辑"""
+"""
+调试来电检测功能
+Debug Call Detection
+"""
 
 import subprocess
-from datetime import datetime
+import time
+import sys
+import os
 
-class CallDebugger:
-    def __init__(self):
-        self.adb_path = "./platform-tools/adb.exe"
-    
-    def debug_telecom_output(self):
-        """调试telecom输出"""
-        print("🔍 调试 dumpsys telecom 输出...")
+def check_adb_connection():
+    """检查ADB连接"""
+    try:
+        result = subprocess.run(["./platform-tools/adb.exe", "devices"], 
+                              capture_output=True, text=True, timeout=5)
+        print("ADB设备列表:")
+        print(result.stdout)
+        return "device" in result.stdout
+    except Exception as e:
+        print(f"ADB连接检查失败: {e}")
+        return False
+
+def get_call_state():
+    """获取通话状态"""
+    try:
+        # 方法1: 使用telephony.registry
+        cmd1 = ["./platform-tools/adb.exe", "shell", "dumpsys", "telephony.registry"]
+        result1 = subprocess.run(cmd1, capture_output=True, text=True, timeout=10)
         
+        print("=== Telephony Registry 输出 ===")
+        lines = result1.stdout.split('\n')
+        for line in lines:
+            if any(keyword in line.lower() for keyword in ['call', 'phone', 'state', 'ring']):
+                print(line.strip())
+        
+        # 方法2: 使用audio
+        cmd2 = ["./platform-tools/adb.exe", "shell", "dumpsys", "audio"]
+        result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=10)
+        
+        print("\n=== Audio 状态 ===")
+        lines = result2.stdout.split('\n')
+        for line in lines:
+            if any(keyword in line.lower() for keyword in ['call', 'ring', 'phone']):
+                print(line.strip())
+        
+        # 方法3: 直接检查通话状态
+        cmd3 = ["./platform-tools/adb.exe", "shell", "getprop", "gsm.voice.call.state"]
+        result3 = subprocess.run(cmd3, capture_output=True, text=True, timeout=5)
+        print(f"\n=== GSM Voice Call State ===")
+        print(f"gsm.voice.call.state: {result3.stdout.strip()}")
+        
+        # 方法4: 检查电话应用状态
+        cmd4 = ["./platform-tools/adb.exe", "shell", "dumpsys", "telecom"]
+        result4 = subprocess.run(cmd4, capture_output=True, text=True, timeout=10)
+        
+        print("\n=== Telecom 状态 ===")
+        lines = result4.stdout.split('\n')
+        for line in lines:
+            if any(keyword in line.lower() for keyword in ['call', 'state', 'active', 'ring']):
+                print(line.strip())
+        
+    except Exception as e:
+        print(f"获取通话状态失败: {e}")
+
+def monitor_call_states():
+    """持续监控通话状态"""
+    print("开始监控通话状态...")
+    print("请在另一台设备拨打您的电话进行测试")
+    print("按 Ctrl+C 停止监控")
+    
+    last_state = None
+    
+    try:
+        while True:
+            # 简化的状态检测
+            try:
+                # 检查音频状态
+                cmd = ["./platform-tools/adb.exe", "shell", "dumpsys", "audio", "|", "grep", "-i", "mode"]
+                result = subprocess.run(["./platform-tools/adb.exe", "shell", "dumpsys", "audio"], 
+                                      capture_output=True, text=True, timeout=5)
+                
+                # 查找关键状态
+                audio_output = result.stdout
+                current_state = "IDLE"
+                
+                if "MODE_IN_CALL" in audio_output:
+                    current_state = "IN_CALL"
+                elif "MODE_RINGTONE" in audio_output:
+                    current_state = "RINGING"
+                elif "MODE_IN_COMMUNICATION" in audio_output:
+                    current_state = "COMMUNICATION"
+                
+                # 检查通话状态变化
+                if current_state != last_state:
+                    timestamp = time.strftime("%H:%M:%S")
+                    print(f"[{timestamp}] 状态变化: {last_state} → {current_state}")
+                    
+                    if current_state == "RINGING":
+                        print("🔔 检测到来电！")
+                        # 这里应该触发自动接听逻辑
+                    elif current_state == "IN_CALL":
+                        print("📞 通话中...")
+                    elif current_state == "IDLE" and last_state in ["RINGING", "IN_CALL"]:
+                        print("📴 通话结束")
+                    
+                    last_state = current_state
+                
+                # 更详细的检测
+                if "RINGING" in audio_output or "ringtone" in audio_output.lower():
+                    print(f"[{time.strftime('%H:%M:%S')}] 🔔 可能有来电 - Audio输出包含铃声相关信息")
+                
+            except Exception as e:
+                print(f"监控异常: {e}")
+            
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        print("\n监控已停止")
+
+def test_call_commands():
+    """测试通话相关命令"""
+    print("=== 测试通话相关ADB命令 ===")
+    
+    commands = [
+        ("检查电话应用", ["./platform-tools/adb.exe", "shell", "pm", "list", "packages", "|", "grep", "phone"]),
+        ("检查通话权限", ["./platform-tools/adb.exe", "shell", "pm", "list", "permissions", "|", "grep", "PHONE"]),
+        ("检查音频焦点", ["./platform-tools/adb.exe", "shell", "dumpsys", "audio", "|", "head", "-20"]),
+    ]
+    
+    for desc, cmd in commands:
         try:
-            result = subprocess.run([
-                self.adb_path, "shell", "dumpsys", "telecom"
-            ], capture_output=True, text=True, timeout=5)
-            
-            if result.returncode != 0:
-                print("❌ 命令执行失败")
-                return
-            
-            output = result.stdout
-            
-            # 1. 查看所有状态事件
-            print("\n📊 所有状态事件:")
-            print("=" * 50)
-            self._show_all_state_events(output)
-            
-            # 2. 测试我的解析函数
-            print("\n🧪 测试状态解析:")
-            print("=" * 50)
-            current_state = self._find_current_call_state(output)
-            print(f"检测到的当前状态: {current_state}")
-            
-            # 3. 查看最新通话记录
-            print("\n📱 最新通话记录:")
-            print("=" * 50)
-            latest_call = self._parse_latest_call(output)
-            if latest_call:
-                print(f"找到通话: {latest_call}")
+            if "|" in " ".join(cmd):
+                # 处理管道命令
+                base_cmd = cmd[:cmd.index("|")]
+                result = subprocess.run(base_cmd, capture_output=True, text=True, timeout=10)
             else:
-                print("未找到活动通话")
-                
-        except Exception as e:
-            print(f"❌ 调试失败: {e}")
-    
-    def _show_all_state_events(self, output):
-        """显示所有状态事件"""
-        lines = output.split('\n')
-        state_events = []
-        
-        for line in lines:
-            if ' - SET_' in line:
-                try:
-                    time_part = line.split(' - SET_')[0].strip()
-                    if ':' in time_part:
-                        if 'SET_RINGING' in line and 'successful incoming call' in line:
-                            state_events.append((time_part, "RINGING", line.strip()))
-                        elif 'SET_ANSWERED' in line and 'answered' in line:
-                            state_events.append((time_part, "ANSWERED", line.strip()))
-                        elif 'SET_ACTIVE' in line and 'active set explicitly' in line:
-                            state_events.append((time_part, "ACTIVE", line.strip()))
-                        elif 'SET_DISCONNECTED' in line:
-                            state_events.append((time_part, "DISCONNECTED", line.strip()))
-                except:
-                    continue
-        
-        # 显示最近10个事件
-        state_events.sort(key=lambda x: x[0])
-        recent_events = state_events[-10:] if len(state_events) > 10 else state_events
-        
-        for i, (time, state, full_line) in enumerate(recent_events):
-            print(f"{i+1:2}. {time} - {state}")
-            print(f"    {full_line[:100]}...")
-            print()
-    
-    def _find_current_call_state(self, output):
-        """从输出中查找当前通话状态"""
-        try:
-            lines = output.split('\n')
-            state_events = []
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             
-            for line in lines:
-                line = line.strip()
-                
-                if ' - SET_' in line:
-                    try:
-                        time_part = line.split(' - SET_')[0].strip()
-                        if ':' in time_part:
-                            if 'SET_RINGING' in line and 'successful incoming call' in line:
-                                state_events.append((time_part, "RINGING"))
-                            elif 'SET_ANSWERED' in line and 'answered' in line:
-                                state_events.append((time_part, "ANSWERED"))
-                            elif 'SET_ACTIVE' in line and 'active set explicitly' in line:
-                                state_events.append((time_part, "ACTIVE"))
-                            elif 'SET_DISCONNECTED' in line:
-                                state_events.append((time_part, "DISCONNECTED"))
-                    except:
-                        continue
-            
-            print(f"找到 {len(state_events)} 个状态事件")
-            
-            if state_events:
-                state_events.sort(key=lambda x: x[0])
-                print("排序后的事件:")
-                for time, state in state_events[-5:]:  # 显示最后5个
-                    print(f"  {time} - {state}")
-                
-                latest_state = state_events[-1][1]
-                print(f"最新状态: {latest_state}")
-                
-                if latest_state == "DISCONNECTED":
-                    return "IDLE"
-                
-                return latest_state
-            
-            return "IDLE"
+            print(f"\n{desc}:")
+            print(result.stdout[:500] + "..." if len(result.stdout) > 500 else result.stdout)
             
         except Exception as e:
-            print(f"解析状态失败: {e}")
-            return "IDLE"
-    
-    def _parse_latest_call(self, output):
-        """解析最新通话"""
-        try:
-            lines = output.split('\n')
-            
-            # 查找最近的通话记录
-            for i, line in enumerate(lines):
-                if 'Call TC@' in line and '[' in line and 'User=' in line:
-                    call_info = self._parse_call_details(lines[i:i+100])
-                    if call_info:
-                        print(f"找到通话记录: {call_info.get('phone_number', 'Unknown')} - {call_info.get('call_state', 'Unknown')}")
-                        if self._is_active_call(call_info):
-                            return call_info
-                            
-        except Exception as e:
-            print(f"解析通话失败: {e}")
-        
-        return None
-    
-    def _parse_call_details(self, lines):
-        """解析通话详情"""
-        call_info = {
-            "call_state": "UNKNOWN",
-            "state_name": "未知",
-            "phone_number": "未知", 
-            "direction": "UNKNOWN"
-        }
-        
-        latest_event_time = None
-        latest_state = None
-        
-        for line in lines:
-            line = line.strip()
-            
-            # 解析方向
-            if 'direction:' in line:
-                if 'INCOMING' in line:
-                    call_info["direction"] = "INCOMING"
-                elif 'OUTGOING' in line:
-                    call_info["direction"] = "OUTGOING"
-            
-            # 解析电话号码
-            if 'To address:' in line and 'tel:' in line:
-                try:
-                    phone_part = line.split('tel:')[1].split()[0]
-                    call_info["phone_number"] = phone_part
-                except:
-                    pass
-            
-            # 解析通话状态 - 找最新的状态
-            if ' - SET_' in line:
-                try:
-                    time_part = line.split(' - SET_')[0].strip()
-                    if ':' in time_part:
-                        if latest_event_time is None or time_part > latest_event_time:
-                            if '- SET_RINGING' in line:
-                                latest_event_time = time_part
-                                latest_state = "RINGING"
-                            elif '- SET_ACTIVE' in line:
-                                latest_event_time = time_part
-                                latest_state = "ACTIVE"
-                            elif '- SET_ANSWERED' in line:
-                                latest_event_time = time_part
-                                latest_state = "ANSWERED"
-                            elif '- SET_DISCONNECTED' in line:
-                                latest_event_time = time_part
-                                latest_state = "DISCONNECTED"
-                except:
-                    pass
-        
-        # 设置最新状态
-        if latest_state:
-            call_info["call_state"] = latest_state
-            state_names = {
-                "RINGING": "响铃中",
-                "ACTIVE": "通话中", 
-                "ANSWERED": "已接听",
-                "DISCONNECTED": "已挂断"
-            }
-            call_info["state_name"] = state_names.get(latest_state, "未知")
-        
-        return call_info
-    
-    def _is_active_call(self, call_info):
-        """判断是否是活动通话"""
-        active_states = ["RINGING", "ACTIVE", "ANSWERED"]
-        return call_info["call_state"] in active_states
+            print(f"{desc} 失败: {e}")
 
 def main():
-    debugger = CallDebugger()
-    debugger.debug_telecom_output()
+    """主函数"""
+    print("📞 来电检测调试工具")
+    print("=" * 40)
+    
+    # 检查ADB连接
+    if not check_adb_connection():
+        print("❌ 请确保Android设备已连接并开启USB调试")
+        return
+    
+    print("✅ ADB连接正常")
+    
+    while True:
+        print("\n选择操作:")
+        print("1. 获取当前通话状态")
+        print("2. 持续监控通话状态")
+        print("3. 测试通话相关命令")
+        print("4. 退出")
+        
+        choice = input("请输入选择 (1-4): ").strip()
+        
+        if choice == "1":
+            get_call_state()
+        elif choice == "2":
+            monitor_call_states()
+        elif choice == "3":
+            test_call_commands()
+        elif choice == "4":
+            break
+        else:
+            print("无效选择，请重试")
 
 if __name__ == "__main__":
     main()

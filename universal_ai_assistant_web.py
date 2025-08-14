@@ -19,6 +19,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from agilemind.universal_ai_assistant import universal_ai_assistant, run_universal_assistant
 from agilemind.tool.unicom_android_tools import UnicomAndroidTools
+from agilemind.tool.real_phone_auto_answer import (
+    real_phone_manager,
+    real_phone_get_status,
+    real_phone_toggle_auto_answer,
+    real_phone_set_scenario,
+    real_phone_set_user_response
+)
 
 
 def init_session_state():
@@ -38,22 +45,22 @@ def check_dependencies():
         return True
     except ImportError as e:
         st.error(f"❌ 依赖检查失败: {str(e)}")
-        st.error("请确保已正确安装 agilemind 包")
+        st.error("请确保已正确安装 unimind 包")
         return False
 
 
 def render_header():
     """渲染页面头部"""
     st.set_page_config(
-        page_title="通用型AI助手",
+        page_title="UniMind--您的联通好帮手",
         page_icon="🤖",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
     # 主标题
-    st.title("🤖 通用型AI助手")
-    st.markdown("### 基于多智能体架构的APP自动化操作系统")
+    st.title("🤖 UniMind")
+    st.markdown("### 基于多智能体架构的联通APP自动化操作系统")
     
     # 添加徽章
     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
@@ -146,7 +153,7 @@ def render_sidebar():
                 "查询流量使用",
                 "办理套餐业务",
                 "权益领取",
-                "设置智能代接",
+                "智能代接设置",
                 "账单查询"
             ],
             "💬 消息通讯": [
@@ -227,7 +234,7 @@ def render_task_examples():
         - "设置电话智能代接"
         
         🎁 **权益服务**
-        - "领取我的联通积分权益"
+        - "领取我的联通权益"
         - "查看可用的优惠券"
         - "兑换话费抵用券"
         
@@ -302,7 +309,7 @@ def render_chat_interface(api_key: str, device_id: str):
                         st.write(message)
                         st.caption(f"🕒 {timestamp}")
         else:
-            st.info("👋 欢迎使用通用型AI助手！请输入您的指令开始对话。")
+            st.info("👋 欢迎使用UniMind！请输入您的指令开始对话。")
     
     # 用户输入
     with st.container():
@@ -362,6 +369,9 @@ def render_chat_interface(api_key: str, device_id: str):
                 # 检查是否是权益领取请求，如果是则直接调用权益领取功能
                 if _is_benefits_claim_request(user_input):
                     result = handle_benefits_claim_request(user_input, device_id)
+                # 检查是否是智能代接请求，如果是则直接调用智能代接功能
+                elif _is_phone_auto_answer_request(user_input):
+                    result = handle_phone_auto_answer_request(user_input, device_id)
                 else:
                     # 调用AI助手
                     result = universal_ai_assistant(user_input, device_id)
@@ -417,6 +427,9 @@ def render_task_results():
         # 检查是否为权益领取结果
         elif _is_benefits_claim_result(result):
             render_benefits_claim_result(result)
+        # 检查是否为智能代接结果
+        elif _is_phone_auto_answer_result(result):
+            render_phone_auto_answer_result(result)
         else:
             render_general_task_result(result)
 
@@ -435,10 +448,26 @@ def _is_benefits_claim_result(result):
     user_input = result.get("user_input", "").lower()
     return any(keyword in user_input for keyword in ['权益', '领取', '优惠券', '领券', '权益领取', '积分权益', '联通积分', '会员权益'])
 
+def _is_phone_auto_answer_result(result):
+    """检查是否是智能代接结果"""
+    user_input = result.get("user_input", "").lower()
+    task_category = result.get("task_category", "").lower()
+    return task_category == "智能代接" or any(keyword in user_input for keyword in ['智能代接', '电话代接', '自动接听', '代接设置', '电话回复', '来电管理'])
+
 def _is_benefits_claim_request(user_input):
     """检查是否是权益领取请求"""
     user_input_lower = user_input.lower()
     return any(keyword in user_input_lower for keyword in ['权益领取', '领取权益', '优惠券', '领券', '积分权益', '联通积分', '会员权益', '权益'])
+
+def _is_phone_auto_answer_request(user_input):
+    """检查是否是智能代接请求"""
+    user_input_lower = user_input.lower()
+    keywords = [
+        '智能代接', '电话代接', '自动接听', '代接设置', '电话回复', '来电管理', '智能接听',
+        '会议模式', '外卖模式', '工作模式', '陌生电话', '忙碌模式', '场景模式', '自定义回复',
+        '开启代接', '关闭代接', '代接状态', '电话设置', '来电设置'
+    ]
+    return any(keyword in user_input_lower for keyword in keywords)
 
 def handle_benefits_claim_request(user_input, device_id):
     """处理权益领取请求"""
@@ -474,12 +503,81 @@ def handle_benefits_claim_request(user_input, device_id):
         }
         
     except Exception as e:
+                    return {
+                "success": False,
+                "error": f"权益领取执行失败: {str(e)}",
+                "user_input": user_input,
+                "target_app": "中国联通",
+                "task_category": "权益领取"
+            }
+
+def handle_phone_auto_answer_request(user_input, device_id):
+    """处理智能代接请求"""
+    try:
+        # 获取当前智能代接状态
+        status = phone_get_status()
+        
+        # 根据用户输入判断具体操作
+        user_input_lower = user_input.lower()
+        
+        if "开启" in user_input_lower or "启用" in user_input_lower:
+            # 开启智能代接
+            from agilemind.tool.phone_auto_answer import phone_toggle_auto_answer
+            result = phone_toggle_auto_answer(True)
+            action = "开启智能代接"
+            
+        elif "关闭" in user_input_lower or "停用" in user_input_lower:
+            # 关闭智能代接
+            from agilemind.tool.phone_auto_answer import phone_toggle_auto_answer
+            result = phone_toggle_auto_answer(False)
+            action = "关闭智能代接"
+            
+        elif "工作模式" in user_input_lower:
+            # 切换到工作模式
+            from agilemind.tool.phone_auto_answer import phone_set_scenario_mode
+            result = phone_set_scenario_mode("work")
+            action = "设置工作模式"
+            
+        elif "会议模式" in user_input_lower:
+            # 切换到会议模式
+            from agilemind.tool.phone_auto_answer import phone_set_scenario_mode
+            result = phone_set_scenario_mode("meeting")
+            action = "设置会议模式"
+            
+        elif "外卖模式" in user_input_lower:
+            # 切换到外卖模式
+            from agilemind.tool.phone_auto_answer import phone_set_scenario_mode
+            result = phone_set_scenario_mode("delivery")
+            action = "设置外卖模式"
+            
+        else:
+            # 默认显示状态信息
+            result = {"success": True, "status": status}
+            action = "查询智能代接状态"
+        
+        # 格式化返回结果
+        return {
+            "success": result.get("success", False),
+            "result": {
+                "action": action,
+                "phone_status": phone_get_status(),
+                "operation_result": result
+            },
+            "user_response": f"{action}操作完成",
+            "user_input": user_input,
+            "target_app": "电话系统",
+            "task_category": "智能代接",
+            "execution_steps": 1,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+    except Exception as e:
         return {
             "success": False,
-            "error": f"权益领取执行失败: {str(e)}",
+            "error": f"智能代接操作失败: {str(e)}",
             "user_input": user_input,
-            "target_app": "中国联通",
-            "task_category": "权益领取"
+            "target_app": "电话系统",
+            "task_category": "智能代接"
         }
 
 def render_balance_query_result(result):
@@ -773,6 +871,141 @@ def render_benefits_claim_result(result):
     # 通用操作按钮和详细信息
     render_common_result_section(result)
 
+def render_phone_auto_answer_result(result):
+    """渲染智能代接专用结果界面"""
+    st.subheader("📞 智能代接结果")
+    
+    # 检查是否有智能代接相关的结果
+    phone_info = None
+    if "result" in result and isinstance(result["result"], dict):
+        phone_info = result["result"]
+    
+    if phone_info:
+        # 获取操作信息
+        action = phone_info.get("action", "未知操作")
+        phone_status = phone_info.get("phone_status", {})
+        operation_result = phone_info.get("operation_result", {})
+        
+        # 显示智能代接结果 - 突出显示
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            # 根据操作类型选择颜色
+            if "开启" in action:
+                gradient_colors = "#00c851, #007e33"
+                icon = "🟢"
+            elif "关闭" in action:
+                gradient_colors = "#ff4444, #cc0000"
+                icon = "🔴"
+            elif "模式" in action:
+                gradient_colors = "#007bff, #0056b3"
+                icon = "🎭"
+            else:
+                gradient_colors = "#6c757d, #495057"
+                icon = "📞"
+            
+            st.markdown(
+                f"""
+                <div style='
+                    background: linear-gradient(135deg, {gradient_colors});
+                    padding: 2rem;
+                    border-radius: 1rem;
+                    text-align: center;
+                    color: white;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+                '>
+                    <h1 style='margin: 0; font-size: 3rem; font-weight: bold;'>
+                        {icon}
+                    </h1>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.2rem; opacity: 0.9;'>
+                        {action}
+                    </p>
+                    <small style='opacity: 0.7;'>
+                        当前场景: {phone_status.get('scenario_name', '未知')}
+                    </small>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        st.markdown("---")
+        
+        # 详细状态信息
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📊 当前状态")
+            
+            # 代接状态
+            enabled_status = "🟢 已开启" if phone_status.get("enabled") else "🔴 已关闭"
+            st.info(f"**代接状态**: {enabled_status}")
+            
+            # 当前场景
+            st.info(f"**当前场景**: {phone_status.get('scenario_name', '未知')}")
+            
+            # 今日通话
+            st.info(f"**今日通话**: {phone_status.get('recent_calls_24h', 0)} 次")
+            
+            # 设备连接
+            device_status = "🟢 已连接" if phone_status.get("device_connected") else "🔴 未连接"
+            st.info(f"**设备状态**: {device_status}")
+        
+        with col2:
+            st.markdown("#### ⚙️ 操作结果")
+            
+            if operation_result.get("success"):
+                st.success("✅ 操作成功")
+                if operation_result.get("message"):
+                    st.success(f"✅ {operation_result['message']}")
+            else:
+                st.error("❌ 操作失败")
+                if operation_result.get("error"):
+                    st.error(f"❌ {operation_result['error']}")
+            
+            # 快捷操作
+            st.markdown("#### 🎯 快捷操作")
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("📞 代接界面", key="phone_ui_btn"):
+                    st.info("💡 请运行: streamlit run phone_auto_answer_ui.py")
+            
+            with col_b:
+                if st.button("🧪 模拟测试", key="phone_test_btn"):
+                    # 模拟来电测试
+                    from agilemind.tool.phone_auto_answer import phone_simulate_call
+                    test_result = phone_simulate_call("138-TEST-8888", "测试来电")
+                    if test_result["success"]:
+                        st.success("✅ 测试完成")
+                    else:
+                        st.error("❌ 测试失败")
+        
+        # 可用场景列表
+        if phone_status.get("available_scenarios"):
+            st.markdown("#### 🎭 可用场景")
+            scenarios = phone_status["available_scenarios"]
+            
+            # 分列显示场景
+            cols = st.columns(3)
+            for i, scenario in enumerate(scenarios):
+                with cols[i % 3]:
+                    icon_map = {
+                        "work": "🏢", "rest": "😴", "driving": "🚗",
+                        "meeting": "📝", "study": "📚", "delivery": "🍕",
+                        "unknown": "❓", "busy": "⏰", "hospital": "🏥"
+                    }
+                    icon = icon_map.get(scenario["mode"], "📞")
+                    st.write(f"{icon} **{scenario['name']}**")
+                    st.caption(scenario["description"])
+    
+    else:
+        # 智能代接操作失败的情况
+        st.error("❌ 智能代接操作失败")
+        if "result" in result:
+            st.write(f"**结果信息**: {result['result']}")
+    
+    # 通用操作按钮和详细信息
+    render_common_result_section(result)
+
 def render_general_task_result(result):
     """渲染通用任务结果界面"""
     st.subheader("📊 执行结果详情")
@@ -859,8 +1092,7 @@ def render_footer():
         st.markdown(
             """
             <div style='text-align: center; color: #666;'>
-                <p>🤖 <b>通用型AI助手</b> | 基于多智能体架构 | 中国联通挑战杯参赛作品</p>
-                <p>🔧 技术栈: OpenAI GPT + Android ADB + Streamlit</p>
+                <p>🤖 <b>通用型AI助手</b> | 多智能体架构 | 第十九届挑战杯揭榜挂帅</p>
             </div>
             """,
             unsafe_allow_html=True
