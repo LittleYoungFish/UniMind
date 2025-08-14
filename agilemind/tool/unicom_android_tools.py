@@ -89,8 +89,9 @@ class UnicomAndroidTools:
             # 使用简单的方法：先保存到设备，再拉取
             success, output = self._execute_adb_command("shell screencap -p /sdcard/screenshot_temp.png")
             if success:
-                # 拉取文件到本地
-                success, output = self._execute_adb_command(f"pull /sdcard/screenshot_temp.png \"{screenshot_path}\"")
+                # 拉取文件到本地（使用正确的路径格式）
+                normalized_path = screenshot_path.replace("\\", "/")
+                success, output = self._execute_adb_command(f"pull /sdcard/screenshot_temp.png {normalized_path}")
                 if success:
                     # 清理设备上的临时文件
                     self._execute_adb_command("shell rm /sdcard/screenshot_temp.png")
@@ -663,15 +664,27 @@ class UnicomAndroidTools:
     def _navigate_to_my_page(self) -> Dict[str, Any]:
         """导航到"我的"页面"""
         try:
-            # 查找并点击"我的"按钮
+            # 查找并点击"我的"按钮 - 使用精确坐标
             find_result = self.unicom_find_element_by_text("我的")
             if not find_result["success"] or not find_result.get("found"):
-                return {"success": False, "message": "未找到我的按钮"}
+                # 如果找不到，直接使用精确坐标点击
+                success, output = self._execute_adb_command("shell input tap 972 2167")
+                if success:
+                    time.sleep(2)
+                    return {"success": True, "message": "成功点击我的按钮 (精确坐标)"}
+                else:
+                    return {"success": False, "message": "未找到我的按钮"}
             
             # 点击"我的"
             tap_result = self.unicom_tap_element("我的")
             if not tap_result["success"]:
-                return {"success": False, "message": "点击我的按钮失败"}
+                # 如果常规点击失败，使用精确坐标
+                success, output = self._execute_adb_command("shell input tap 972 2167")
+                if success:
+                    time.sleep(2)
+                    return {"success": True, "message": "成功点击我的按钮 (备用坐标)"}
+                else:
+                    return {"success": False, "message": "点击我的按钮失败"}
             
             # 等待页面加载
             time.sleep(2)
@@ -753,14 +766,26 @@ class UnicomAndroidTools:
     def _navigate_to_service_page(self) -> Dict[str, Any]:
         """导航到服务页面"""
         try:
-            # 查找并点击"服务"按钮
+            # 查找并点击"服务"按钮 - 使用精确坐标
             find_result = self.unicom_find_element_by_text("服务")
             if not find_result["success"] or not find_result.get("found"):
-                return {"success": False, "message": "未找到服务按钮"}
+                # 如果找不到，直接使用精确坐标点击
+                success, output = self._execute_adb_command("shell input tap 324 2167")
+                if success:
+                    time.sleep(2)
+                    return {"success": True, "message": "成功点击服务按钮 (精确坐标)"}
+                else:
+                    return {"success": False, "message": "未找到服务按钮"}
             
             tap_result = self.unicom_tap_element("服务")
             if not tap_result["success"]:
-                return {"success": False, "message": "点击服务按钮失败"}
+                # 如果常规点击失败，使用精确坐标
+                success, output = self._execute_adb_command("shell input tap 324 2167")
+                if success:
+                    time.sleep(2)
+                    return {"success": True, "message": "成功点击服务按钮 (备用坐标)"}
+                else:
+                    return {"success": False, "message": "点击服务按钮失败"}
             
             # 等待页面加载
             time.sleep(2)
@@ -876,10 +901,12 @@ class UnicomAndroidTools:
 
     def _get_available_benefits(self, screen_text: str) -> List[str]:
         """从屏幕文本中提取可用的权益"""
-        # 常见的权益关键词
+        # 基于实际PLUS会员页面的权益关键词
         benefit_keywords = [
-            "流量包", "话费券", "视频会员", "音乐会员", "阅读券", 
-            "购物券", "外卖券", "打车券", "咖啡券", "电影券"
+            "酷狗音乐", "优酷视频", "QQ音乐", "腾讯视频", "芒果TV", 
+            "喜马拉雅", "网易云音乐", "饿了么", "高德打车", "瑞幸咖啡",
+            "滴滴青桔", "爱奇艺", "哔哩哔哩", "WPS", "知乎", "百度文库",
+            "迅雷", "5G宽视界", "流量包", "话费券", "会员月卡", "VIP"
         ]
         
         available_benefits = []
@@ -888,4 +915,92 @@ class UnicomAndroidTools:
                 available_benefits.append(keyword)
         
         return available_benefits
+
+    @tool("unicom_user_benefits_claim_interactive")
+    def unicom_user_benefits_claim_interactive(self, user_responses: Dict[str, str] = None) -> Dict[str, Any]:
+        """
+        交互式用户权益领取业务流程 - 支持前端交互
+        
+        Args:
+            user_responses: 用户响应字典，包含各个询问点的答案
+                - consumption_choice: 权益超市消费选择 ("是"/"否")
+                - is_plus_member: 是否是PLUS会员 ("是"/"否")
+                - apply_membership: 是否申请PLUS会员 ("是"/"否")
+                - benefit_choice: 选择的权益名称
+        """
+        try:
+            logging.info("开始交互式用户权益领取业务流程")
+            result = {"success": True, "steps": [], "interactions": []}
+            
+            # 步骤1: 启动中国联通APP
+            launch_result = self.unicom_launch_app("unicom_app")
+            if not launch_result["success"]:
+                return {"success": False, "message": "启动APP失败", "details": launch_result}
+            result["steps"].append({"step": "launch_app", "result": launch_result})
+            time.sleep(3)
+            
+            # 步骤2: 进入"我的"页面
+            my_page_result = self._navigate_to_my_page()
+            result["steps"].append({"step": "navigate_to_my_page", "result": my_page_result})
+            if not my_page_result["success"]:
+                return {"success": False, "message": "无法进入我的页面", "details": my_page_result}
+            
+            # 步骤3: 进入领券中心并领取优惠券
+            coupon_result = self._claim_coupons_in_center()
+            result["steps"].append({"step": "claim_coupons", "result": coupon_result})
+            
+            # 步骤4: 进入服务页面
+            service_result = self._navigate_to_service_page()
+            result["steps"].append({"step": "navigate_to_service_page", "result": service_result})
+            if not service_result["success"]:
+                return {"success": False, "message": "无法进入服务页面", "details": service_result}
+            
+            # 步骤5: 处理权益超市交互（如果需要）
+            if user_responses and "consumption_choice" in user_responses:
+                consumption_choice = user_responses["consumption_choice"]
+                if consumption_choice == "是":
+                    # 处理权益超市
+                    market_result = self._handle_benefits_market(lambda q, opts: "是")
+                    result["steps"].append({"step": "benefits_market", "result": market_result})
+                    return {"success": True, "message": "用户选择消费，请手动操作", "result": result}
+                else:
+                    result["steps"].append({"step": "benefits_market", "choice": "declined"})
+            else:
+                # 需要询问用户关于权益超市
+                result["interactions"].append({
+                    "type": "choice",
+                    "question": "是否需要在权益超市进行消费？",
+                    "options": ["是", "否"],
+                    "key": "consumption_choice"
+                })
+                return {"success": True, "message": "需要用户交互", "result": result}
+            
+            # 步骤6: 处理PLUS会员
+            def interactive_callback(question, options):
+                if "PLUS会员" in question:
+                    return user_responses.get("is_plus_member", "否")
+                elif "办理" in question:
+                    return user_responses.get("apply_membership", "否")
+                elif "权益" in question:
+                    return user_responses.get("benefit_choice", options[0] if options else "")
+                return "否"
+            
+            plus_result = self._handle_plus_membership(interactive_callback if user_responses else None)
+            result["steps"].append({"step": "plus_membership", "result": plus_result})
+            
+            # 如果没有用户响应，需要收集交互信息
+            if not user_responses:
+                result["interactions"].append({
+                    "type": "choice",
+                    "question": "您是PLUS会员吗？",
+                    "options": ["是", "否"],
+                    "key": "is_plus_member"
+                })
+                return {"success": True, "message": "需要用户交互", "result": result}
+            
+            return {"success": True, "message": "用户权益领取流程完成", "result": result}
+                
+        except Exception as e:
+            logging.error(f"交互式权益领取失败: {str(e)}")
+            return {"success": False, "message": f"交互式权益领取失败: {str(e)}"}
 

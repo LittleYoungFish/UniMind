@@ -232,8 +232,27 @@ user_demand_types:
     
   - type: "用户权益"
     description: "用户权益领取和管理，包括优惠券、权益超市、PLUS会员等"
-    keywords: ["权益", "领取", "优惠券", "领券中心", "权益超市", "PLUS会员", "会员权益"]
+    keywords: ["权益", "领取", "优惠券", "领券中心", "权益超市", "PLUS会员", "会员权益", "交互式权益", "权益选择"]
     priority: "medium"
+    interactive: true
+    flow_steps:
+      - step: "优惠券领取"
+        auto: true
+      - step: "权益超市选择"
+        interactive: true
+        question: "是否需要在权益超市进行消费？"
+        options: ["是", "否"]
+      - step: "PLUS会员处理"
+        interactive: true
+        sub_steps:
+          - question: "您是PLUS会员吗？"
+            options: ["是", "否"]
+          - question: "是否需要办理PLUS会员来享受更多权益？"
+            options: ["是", "否"]
+            condition: "not_plus_member"
+          - question: "请选择要领取的权益"
+            options: "dynamic"
+            condition: "is_plus_member"
     
   - type: "客户服务"
     description: "客服咨询、投诉建议、服务预约等"
