@@ -14,7 +14,7 @@ from typing import Dict, Any
 # 添加项目路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from agilemind.tool.phone_auto_answer import (
+from unimind.tool.phone_auto_answer import (
     phone_manager,
     ScenarioMode,
     phone_set_scenario_mode,

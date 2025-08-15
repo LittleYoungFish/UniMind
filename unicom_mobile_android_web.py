@@ -7,7 +7,7 @@ import streamlit as st
 import json
 import time
 from datetime import datetime
-from agilemind.unicom_mobile_android import unicom_mobile_android_assistant
+from unimind.unicom_mobile_android import unicom_mobile_android_assistant
 
 
 def main():

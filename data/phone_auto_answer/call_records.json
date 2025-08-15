@@ -97,5 +97,14 @@
     "response_played": "您好，我正在工作中，无法接听电话。如有紧急事务请发送短信，我会尽快回复。谢谢理解。",
     "duration_seconds": 4.0,
     "auto_answered": true
+  },
+  {
+    "phone_number": "未知号码",
+    "caller_name": "未知",
+    "call_time": "2025-08-15T13:07:55.214345",
+    "scenario_mode": "rest",
+    "response_played": "现在是休息时间，请勿打扰。如有紧急情况请发送短信说明，明天我会及时回复。晚安。",
+    "duration_seconds": 4.0,
+    "auto_answered": true
   }
 ]

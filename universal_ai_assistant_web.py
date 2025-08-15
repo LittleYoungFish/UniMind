@@ -17,16 +17,16 @@ import sys
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from agilemind.universal_ai_assistant import universal_ai_assistant, run_universal_assistant
-from agilemind.tool.unicom_android_tools import UnicomAndroidTools
-from agilemind.tool.real_phone_auto_answer import (
+from unimind.universal_ai_assistant import universal_ai_assistant, run_universal_assistant
+from unimind.tool.unicom_android_tools import UnicomAndroidTools
+from unimind.tool.real_phone_auto_answer import (
     real_phone_manager,
     real_phone_get_status,
     real_phone_toggle_auto_answer,
     real_phone_set_scenario,
     real_phone_set_user_response
 )
-from agilemind.tool.phone_auto_answer import (
+from unimind.tool.phone_auto_answer import (
     phone_manager,
     ScenarioMode,
     phone_set_scenario_mode,
@@ -53,7 +53,7 @@ def init_session_state():
 def check_dependencies():
     """检查依赖"""
     try:
-        import agilemind
+        import unimind
         return True
     except ImportError as e:
         st.error(f"❌ 依赖检查失败: {str(e)}")
@@ -138,7 +138,7 @@ def render_sidebar():
             if device_id:
                 with st.spinner("正在测试设备连接..."):
                     try:
-                        from agilemind.tool.app_automation_tools import AppAutomationTools
+                        from unimind.tool.app_automation_tools import AppAutomationTools
                         tools = AppAutomationTools()
                         result = tools.get_installed_apps(device_id)
                         
@@ -554,31 +554,31 @@ def handle_phone_auto_answer_request(user_input, device_id):
         
         if "开启" in user_input_lower or "启用" in user_input_lower:
             # 开启智能代接
-            from agilemind.tool.phone_auto_answer import phone_toggle_auto_answer
+            from unimind.tool.phone_auto_answer import phone_toggle_auto_answer
             result = phone_toggle_auto_answer(True)
             action = "开启智能代接"
             
         elif "关闭" in user_input_lower or "停用" in user_input_lower:
             # 关闭智能代接
-            from agilemind.tool.phone_auto_answer import phone_toggle_auto_answer
+            from unimind.tool.phone_auto_answer import phone_toggle_auto_answer
             result = phone_toggle_auto_answer(False)
             action = "关闭智能代接"
             
         elif "工作模式" in user_input_lower:
             # 切换到工作模式
-            from agilemind.tool.phone_auto_answer import phone_set_scenario_mode
+            from unimind.tool.phone_auto_answer import phone_set_scenario_mode
             result = phone_set_scenario_mode("work")
             action = "设置工作模式"
             
         elif "会议模式" in user_input_lower:
             # 切换到会议模式
-            from agilemind.tool.phone_auto_answer import phone_set_scenario_mode
+            from unimind.tool.phone_auto_answer import phone_set_scenario_mode
             result = phone_set_scenario_mode("meeting")
             action = "设置会议模式"
             
         elif "外卖模式" in user_input_lower:
             # 切换到外卖模式
-            from agilemind.tool.phone_auto_answer import phone_set_scenario_mode
+            from unimind.tool.phone_auto_answer import phone_set_scenario_mode
             result = phone_set_scenario_mode("delivery")
             action = "设置外卖模式"
             
@@ -1004,7 +1004,7 @@ def render_phone_auto_answer_result(result):
             with col_b:
                 if st.button("🧪 模拟测试", key="phone_test_btn"):
                     # 模拟来电测试
-                    from agilemind.tool.phone_auto_answer import phone_simulate_call
+                    from unimind.tool.phone_auto_answer import phone_simulate_call
                     test_result = phone_simulate_call("138-TEST-8888", "测试来电")
                     if test_result["success"]:
                         st.success("✅ 测试完成")

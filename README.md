@@ -15,35 +15,12 @@
 ### 🎯 核心功能
 
 #### 🏢 中国联通专用服务
-- **话费查询**: 自动查询账户余额、流量使用情况
-- **套餐办理**: 智能办理和变更手机套餐
+- **话费查询**: 自动查询账户话费余额
+- **流量查询**: 自动查询账户流量余额
 - **权益领取**: 自动领取积分权益、优惠券等
 - **电话智能代接**: 设置和管理智能代接功能
 - **账单管理**: 查询历史账单、设置缴费提醒
 
-#### 💬 社交通讯服务  
-- **消息自动回复**: 智能回复微信、QQ消息
-- **内容分享**: 跨平台分享内容到朋友圈、空间
-- **群聊管理**: 自动管理微信群、QQ群
-- **联系人维护**: 智能管理通讯录
-
-#### 🛒 购物商务服务
-- **商品搜索**: 在淘宝、京东等平台搜索商品
-- **价格比较**: 跨平台比较商品价格
-- **下单购买**: 自动完成购买流程（安全控制）
-- **订单管理**: 查询订单状态、申请售后
-
-#### 🗺️ 出行导航服务
-- **路线规划**: 智能规划最优出行路线
-- **打车服务**: 自动叫车、管理行程
-- **公共交通**: 查询地铁、公交换乘方案
-- **酒店预订**: 智能预订酒店、机票
-
-#### 🎵 娱乐生活服务
-- **音视频控制**: 自动播放音乐、视频
-- **内容推荐**: 基于偏好推荐内容
-- **游戏辅助**: 简单游戏操作辅助
-- **生活服务**: 天气查询、日程管理等
 
 ## 🏗️ 技术架构
 
@@ -146,8 +123,8 @@ graph TB
 
 1. **克隆项目**
 ```bash
-git clone https://github.com/wnrock/AgileMind.git
-cd AgileMind
+git clone https://github.com/LittleYoungFish/UniMind.git
+cd UniMind
 ```
 
 2. **安装依赖**
@@ -183,7 +160,7 @@ streamlit run universal_ai_assistant_web.py
 python app.py "帮我查询联通话费余额"
 
 # 指定设备
-python app.py "在微信上回复好的" --device-id emulator-5554
+python app.py "帮我领取权益" --device-id emulator-5554
 
 # 交互式模式  
 python app.py --interactive
@@ -204,29 +181,8 @@ streamlit run unicom_mobile_android_web.py
 # 查询话费
 python app.py "帮我查询当前话费余额"
 
-# 办理套餐
-python app.py "我想办理一个30元的流量包"
-
 # 权益领取
 python app.py "帮我领取联通会员权益"
-```
-
-#### 社交应用操作
-```bash  
-# 消息回复
-python app.py "回复微信上张三说'收到，马上处理'"
-
-# 内容分享
-python app.py "把这张图片分享到朋友圈"
-```
-
-#### 购物应用操作
-```bash
-# 商品搜索
-python app.py "在淘宝上搜索iPhone 15 Pro"
-
-# 价格比较
-python app.py "比较京东和淘宝上这个商品的价格"
 ```
 
 ## 🎯 中国联通专用功能
@@ -358,7 +314,7 @@ ANDROID_DEVICE_ID=device-serial-number
 
 ## 📞 联系我们
 
-- **项目主页**: [https://github.com/wnrock/AgileMind](https://github.com/wnrock/AgileMind)
+- **项目主页**: [https://github.com/LittleYoungFish/UniMind](https://github.com/LittleYoungFish/UniMind)
 - **问题反馈**: [GitHub Issues](https://github.com/wnrock/AgileMind/issues)
 - **技术交流**: 欢迎提交PR和Issue
 
@@ -369,7 +325,5 @@ ANDROID_DEVICE_ID=device-serial-number
 **🏆 中国联通挑战杯参赛作品**
 
 *基于多智能体架构的通用型AI助手技术研究*
-
-![Logo](assets/logo.png)
 
 </div>

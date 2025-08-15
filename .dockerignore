@@ -1,42 +1,10 @@
-# Git repository
-.git
-.gitignore
+# UniMind Docker部署 - 忽略文件
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Python cache
-__pycache__
-*.pyc
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Examples
-example
-out
-
-# Environment variables
-.env
-.env
-
-# Documentation
-*.md
-LICENSE
-
-# PyPI configuration file
-.pypirc
-
-# Distribution / packaging
-pyproject.toml
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
 .Python
 build/
 develop-eggs/
@@ -50,11 +18,112 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# Github Actions
-.github/
+# 虚拟环境
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+logs/
+*.log
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 测试文件
+test/
+tests/
+*_test.py
+test_*.py
+
+# 文档文件
+docs/
+*.md
+!README.md
+
+# 版本控制
+.git/
+.gitignore
+.gitattributes
+
+# Docker文件本身
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 平台工具压缩包
+platform-tools-windows.zip
+
+# 截图和媒体文件
+screenshots/
+assets/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp3
+*.mp4
+*.wav
+
+# 数据文件 (这些会通过数据卷挂载)
+data/
+output/
+
+# 配置文件 (敏感信息)
+config_private.yaml
+.env.local
+.env.production
+
+# MacOS文件
+.DS_Store
+
+# Windows文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux文件
+*~
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# 缓存目录
+.cache/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# 其他临时文件
+*.pid
+*.seed
+*.cover
+.coverage
+.nyc_output

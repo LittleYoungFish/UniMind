@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  unimind:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        pip_mirror: "false"  # 设置为 "true" 使用清华镜像源
+    container_name: unimind-ai-assistant
+    ports:
+      - "8501:8501"  # Streamlit端口
+    environment:
+      # Streamlit配置
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - STREAMLIT_SERVER_FILE_WATCHER_TYPE=none
+      
+      # 应用配置
+      - PYTHONPATH=/app
+      - TZ=Asia/Shanghai
+      
+      # OpenAI API配置 (从环境变量传入)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      
+    volumes:
+      # 持久化数据目录
+      - unimind_data:/app/data
+      - unimind_logs:/app/logs
+      - unimind_screenshots:/app/screenshots
+      
+      # 设备连接 (如果需要连接Android设备)
+      - /dev/bus/usb:/dev/bus/usb:rw
+      
+    devices:
+      # USB设备访问 (用于ADB连接)
+      - /dev/bus/usb
+      
+    privileged: false  # 生产环境建议设为false
+    
+    restart: unless-stopped
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+          
+    networks:
+      - unimind_network
+
+# 数据卷
+volumes:
+  unimind_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+  unimind_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
+  unimind_screenshots:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./screenshots
+
+# 网络
+networks:
+  unimind_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

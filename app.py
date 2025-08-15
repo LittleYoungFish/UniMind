@@ -6,7 +6,7 @@ Universal AI Assistant Entry Point
 中国联通挑战杯比赛 - 基于多智能体架构的通用型AI助手
 """
 
-from agilemind.main import entry
+from unimind.main import entry
 
 if __name__ == "__main__":
     entry()
