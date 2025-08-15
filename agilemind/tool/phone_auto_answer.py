@@ -14,10 +14,24 @@ import json
 import time
 import logging
 import subprocess
+import threading
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum
+
+# 尝试导入语音库
+try:
+    import pyttsx3
+    PYTTSX3_AVAILABLE = True
+except ImportError:
+    PYTTSX3_AVAILABLE = False
+
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
 
 from .tool_decorator import tool
 
@@ -83,6 +97,11 @@ class PhoneAutoAnswerManager:
         self.call_records: List[CallRecord] = []
         self.ring_delay_seconds = 10  # 响铃延迟时间（秒）
         self.custom_responses = {}  # 自定义回复语
+        
+        # 真实来电监控相关
+        self.monitoring_thread = None
+        self.is_monitoring = False
+        self.last_call_time = 0
         
         # 创建必要的目录
         self.data_dir = "data/phone_auto_answer"
@@ -501,6 +520,14 @@ class PhoneAutoAnswerManager:
             old_status = self.is_enabled
             self.is_enabled = enabled
             
+            # 管理真实监控
+            if enabled and not old_status:
+                # 开启时启动真实监控
+                self.start_real_monitoring()
+            elif not enabled and old_status:
+                # 关闭时停止真实监控
+                self.stop_real_monitoring()
+            
             status_text = "开启" if enabled else "关闭"
             self.logger.info(f"🎛️ 自动代接功能已{status_text}")
             
@@ -510,7 +537,8 @@ class PhoneAutoAnswerManager:
                 "old_status": old_status,
                 "current_scenario": self.current_scenario.value,
                 "scenario_name": self.scenarios[self.current_scenario].name,
-                "message": f"自动代接功能已{status_text}"
+                "message": f"自动代接功能已{status_text}",
+                "real_monitoring": self.is_monitoring
             }
             
         except Exception as e:
@@ -546,6 +574,8 @@ class PhoneAutoAnswerManager:
             "recent_calls_24h": len([r for r in self.call_records 
                                    if r.call_time > datetime.now() - timedelta(hours=24)]),
             "device_connected": self.check_device_connection(),
+            "real_monitoring": self.is_monitoring,
+            "monitoring_active": self.is_monitoring and self.is_enabled,
             "available_scenarios": [
                 {
                     "mode": mode.value,
@@ -555,10 +585,248 @@ class PhoneAutoAnswerManager:
                 for mode, config in self.scenarios.items()
             ]
         }
+    
+    def get_telephony_state(self) -> str:
+        """获取telephony状态"""
+        try:
+            result = subprocess.run([
+                self.adb_path, "shell", "dumpsys", "telephony.registry"
+            ], capture_output=True, text=True, timeout=1)
+            
+            if result.returncode == 0:
+                return result.stdout
+        except Exception as e:
+            self.logger.debug(f"获取telephony状态失败: {e}")
+        return ""
+
+    def is_incoming_call(self, telephony_output: str) -> bool:
+        """检查是否有来电"""
+        if not telephony_output:
+            return False
+        
+        # 检查关键指标
+        indicators = [
+            "mCallState=1",           # 通话状态为1（响铃）
+            "CallState: 1",           # 另一种格式
+            "call state: 1",          # 小写格式
+            "Ringing call state: 1"   # 响铃状态
+        ]
+        
+        for indicator in indicators:
+            if indicator in telephony_output:
+                return True
+        
+        return False
+
+    def execute_real_auto_answer(self) -> bool:
+        """执行真实自动接听流程"""
+        self.logger.info("🚨 执行真实自动接听流程...")
+        
+        try:
+            # 1. 接听电话
+            self.logger.info("📞 接听电话...")
+            subprocess.run([self.adb_path, "shell", "input", "keyevent", "5"], timeout=5)
+            
+            # 2. 等待连接稳定
+            time.sleep(1)
+            
+            # 3. 获取当前场景的回复文本
+            current_config = self.scenarios.get(self.current_scenario)
+            if self.current_scenario.value in self.custom_responses:
+                text = self.custom_responses[self.current_scenario.value]
+            elif current_config:
+                text = current_config.response_text
+            else:
+                text = "您好，我现在不方便接听电话，有重要事情请稍后联系，谢谢！"
+            
+            # 4. 播放语音回复
+            self.logger.info("🎤 播放语音回复...")
+            voice_success = self._play_voice_response(text)
+            
+            # 5. 等待播放完成
+            time.sleep(4)
+            
+            # 6. 挂断电话
+            self.logger.info("📴 挂断电话...")
+            subprocess.run([self.adb_path, "shell", "input", "keyevent", "6"], timeout=5)
+            
+            # 7. 记录通话记录
+            self._add_real_call_record("未知号码", "未知", text)
+            
+            self.logger.info("✅ 真实自动接听完成！")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ 执行真实自动接听异常: {e}")
+            return False
+
+    def _play_voice_response(self, text: str) -> bool:
+        """播放语音回复"""
+        voice_success = False
+        
+        # 尝试方法1：gTTS（在线）
+        if GTTS_AVAILABLE and not voice_success:
+            try:
+                self.logger.info("🎤 使用gTTS生成语音...")
+                tts = gTTS(text=text, lang='zh', slow=False)
+                
+                audio_file = "voice_reply.mp3"
+                tts.save(audio_file)
+                
+                # 推送到设备
+                device_path = "/sdcard/voice_reply.mp3"
+                subprocess.run([self.adb_path, "push", audio_file, device_path], timeout=10)
+                
+                # 播放音频文件
+                subprocess.run([
+                    self.adb_path, "shell", 
+                    f"am start -a android.intent.action.VIEW -d file://{device_path} -t audio/mpeg"
+                ], timeout=5)
+                
+                # 删除本地文件
+                if os.path.exists(audio_file):
+                    os.remove(audio_file)
+                
+                self.logger.info("✅ gTTS语音播放成功")
+                voice_success = True
+                
+            except Exception as e:
+                self.logger.warning(f"❌ gTTS失败: {e}")
+        
+        # 尝试方法2：pyttsx3（离线）
+        if PYTTSX3_AVAILABLE and not voice_success:
+            try:
+                self.logger.info("🎤 使用pyttsx3生成语音...")
+                engine = pyttsx3.init()
+                
+                # 设置语音属性
+                voices = engine.getProperty('voices')
+                if len(voices) > 1:
+                    engine.setProperty('voice', voices[1].id)  # 尝试女声
+                engine.setProperty('rate', 150)  # 语速
+                engine.setProperty('volume', 1.0)  # 音量
+                
+                # 生成语音文件
+                audio_file = "voice_reply.wav"
+                engine.save_to_file(text, audio_file)
+                engine.runAndWait()
+                
+                if os.path.exists(audio_file):
+                    # 推送到设备
+                    device_path = "/sdcard/voice_reply.wav"
+                    subprocess.run([self.adb_path, "push", audio_file, device_path], timeout=10)
+                    
+                    # 播放音频
+                    subprocess.run([
+                        self.adb_path, "shell",
+                        f"am start -a android.intent.action.VIEW -d file://{device_path} -t audio/wav"
+                    ], timeout=5)
+                    
+                    # 删除本地文件
+                    os.remove(audio_file)
+                    
+                    self.logger.info("✅ pyttsx3语音播放成功")
+                    voice_success = True
+                    
+            except Exception as e:
+                self.logger.warning(f"❌ pyttsx3失败: {e}")
+        
+        # 备用方案
+        if not voice_success:
+            try:
+                self.logger.info("🎤 使用备用提示方案...")
+                # 发送通知
+                subprocess.run([
+                    self.adb_path, "shell", 
+                    f"cmd notification post -S bigtext -t '智能代接' 'AutoReply' '{text[:50]}...'"
+                ], timeout=5)
+                # 播放系统音效
+                subprocess.run([self.adb_path, "shell", "input", "keyevent", "KEYCODE_CAMERA"], timeout=5)
+                time.sleep(0.3)
+                subprocess.run([self.adb_path, "shell", "input", "keyevent", "KEYCODE_FOCUS"], timeout=5)
+                self.logger.info("✅ 备用提示已发送")
+                voice_success = True
+            except Exception as e:
+                self.logger.error(f"❌ 备用方案也失败: {e}")
+        
+        return voice_success
+
+    def _add_real_call_record(self, phone_number: str, caller_name: str, response_text: str):
+        """添加真实通话记录"""
+        try:
+            record = CallRecord(
+                phone_number=phone_number,
+                caller_name=caller_name,
+                call_time=datetime.now(),
+                scenario_mode=self.current_scenario,
+                response_played=response_text,
+                duration_seconds=4.0,  # 估算时长
+                auto_answered=True
+            )
+            
+            self.call_records.append(record)
+            # 只保留最近50条记录
+            if len(self.call_records) > 50:
+                self.call_records = self.call_records[-50:]
+            
+            self._save_call_records()
+            self.logger.info(f"📝 已记录真实通话: {phone_number}")
+            
+        except Exception as e:
+            self.logger.error(f"❌ 保存真实通话记录失败: {e}")
+
+    def start_real_monitoring(self):
+        """启动真实来电监控"""
+        if self.is_monitoring:
+            self.logger.warning("⚠️ 真实监控已在运行")
+            return
+        
+        self.is_monitoring = True
+        self.monitoring_thread = threading.Thread(target=self._real_monitoring_loop, daemon=True)
+        self.monitoring_thread.start()
+        self.logger.info("🚀 真实来电监控已启动")
+
+    def stop_real_monitoring(self):
+        """停止真实来电监控"""
+        if not self.is_monitoring:
+            return
+        
+        self.is_monitoring = False
+        if self.monitoring_thread and self.monitoring_thread.is_alive():
+            self.monitoring_thread.join(timeout=2)
+        self.logger.info("🛑 真实来电监控已停止")
+
+    def _real_monitoring_loop(self):
+        """真实来电监控循环"""
+        self.logger.info("📱 开始真实来电监控循环...")
+        
+        while self.is_monitoring and self.is_enabled:
+            try:
+                # 获取telephony状态
+                telephony_output = self.get_telephony_state()
+                
+                # 检查是否有来电
+                if self.is_incoming_call(telephony_output):
+                    current_time = time.time()
+                    
+                    # 防重复执行（5秒内只执行一次）
+                    if current_time - self.last_call_time > 5:
+                        self.logger.info("🔔 检测到真实来电！")
+                        self.execute_real_auto_answer()
+                        self.last_call_time = current_time
+                
+                time.sleep(0.5)  # 0.5秒检查一次
+                
+            except Exception as e:
+                self.logger.error(f"❌ 真实监控循环异常: {e}")
+                time.sleep(1)
+        
+        self.logger.info("📱 真实来电监控循环结束")
 
 
-# 创建全局实例
-phone_manager = PhoneAutoAnswerManager()
+# 创建全局实例 - 使用正确的ADB路径
+adb_path = "platform-tools/adb.exe" if os.path.exists("platform-tools/adb.exe") else "adb"
+phone_manager = PhoneAutoAnswerManager(adb_path=adb_path)
 
 
 @tool(

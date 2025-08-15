@@ -88,5 +88,14 @@
     "response_played": "您好，我正在工作中，无法接听电话。如有紧急事务请发送短信，我会尽快回复。谢谢理解。",
     "duration_seconds": 9.153182,
     "auto_answered": true
+  },
+  {
+    "phone_number": "未知号码",
+    "caller_name": "未知",
+    "call_time": "2025-08-15T11:12:49.317691",
+    "scenario_mode": "work",
+    "response_played": "您好，我正在工作中，无法接听电话。如有紧急事务请发送短信，我会尽快回复。谢谢理解。",
+    "duration_seconds": 4.0,
+    "auto_answered": true
   }
 ]
